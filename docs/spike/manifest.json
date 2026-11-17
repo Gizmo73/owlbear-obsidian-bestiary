@@ -1,0 +1,16 @@
+{
+  "name": "Obsidian Bridge Test (GitHub Pages)",
+  "version": "0.0.1",
+  "manifest_version": 1,
+  "action": {
+    "title": "Obsidian Bridge Test (GitHub Pages)",
+    "icon": "https://gizmo73.github.io/owlbear-obsidian-bestiary/spike/icon.svg",
+    "popover": "https://gizmo73.github.io/owlbear-obsidian-bestiary/spike/index.html",
+    "width": 380,
+    "height": 560
+  },
+  "icon": "https://gizmo73.github.io/owlbear-obsidian-bestiary/spike/icon.svg",
+  "author": "Gizmo73",
+  "homepage_url": "https://github.com/Gizmo73/owlbear-obsidian-bestiary",
+  "description": "Throwaway connection test between Owlbear Rodeo and an Obsidian plugin"
+}

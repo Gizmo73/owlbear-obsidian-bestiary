@@ -1,0 +1,9 @@
+{
+  "id": "owlbear-bridge-spike",
+  "name": "Owlbear Bridge Test",
+  "version": "0.0.1",
+  "minAppVersion": "1.5.0",
+  "description": "Throwaway connection test between Owlbear Rodeo (in the web viewer) and Obsidian.",
+  "author": "Gizmo73",
+  "isDesktopOnly": true
+}
