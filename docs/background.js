@@ -3485,8 +3485,8 @@
     }
   };
 
-  // node_modules/@owlbear-rodeo/sdk/lib/builders/LabelBuilder.js
-  var LabelBuilder = class extends GenericItemBuilder {
+  // node_modules/@owlbear-rodeo/sdk/lib/builders/TextBuilder.js
+  var TextBuilder = class extends GenericItemBuilder {
     constructor(player) {
       super(player);
       this._text = {
@@ -3498,12 +3498,12 @@
         ],
         plainText: "",
         style: {
-          padding: 8,
+          padding: 0,
           fontFamily: "Roboto",
           fontSize: 16,
           fontWeight: 400,
-          textAlign: "CENTER",
-          textAlignVertical: "MIDDLE",
+          textAlign: "LEFT",
+          textAlignVertical: "TOP",
           fillColor: "white",
           fillOpacity: 1,
           strokeColor: "white",
@@ -3511,20 +3511,12 @@
           strokeWidth: 0,
           lineHeight: 1.5
         },
-        type: "PLAIN",
+        type: "RICH",
         width: "AUTO",
         height: "AUTO"
       };
-      this._style = {
-        backgroundColor: "#3D4051",
-        backgroundOpacity: 1,
-        cornerRadius: 8,
-        pointerDirection: "DOWN",
-        pointerWidth: 4,
-        pointerHeight: 4
-      };
       this._item.layer = "TEXT";
-      this._item.name = "Label";
+      this._item.name = "Text";
     }
     text(text) {
       this._text = text;
@@ -3538,8 +3530,16 @@
       this._text.height = height;
       return this.self();
     }
+    richText(richText) {
+      this._text.richText = richText;
+      return this.self();
+    }
     plainText(plainText) {
       this._text.plainText = plainText;
+      return this.self();
+    }
+    textType(textType) {
+      this._text.type = textType;
       return this.self();
     }
     padding(padding) {
@@ -3590,44 +3590,8 @@
       this._text.style.lineHeight = lineHeight;
       return this.self();
     }
-    style(style) {
-      this._style = style;
-      return this.self();
-    }
-    backgroundColor(backgroundColor) {
-      this._style.backgroundColor = backgroundColor;
-      return this.self();
-    }
-    backgroundOpacity(backgroundOpacity) {
-      this._style.backgroundOpacity = backgroundOpacity;
-      return this.self();
-    }
-    cornerRadius(cornerRadius) {
-      this._style.cornerRadius = cornerRadius;
-      return this.self();
-    }
-    pointerWidth(pointerWidth) {
-      this._style.pointerWidth = pointerWidth;
-      return this.self();
-    }
-    pointerHeight(pointerHeight) {
-      this._style.pointerHeight = pointerHeight;
-      return this.self();
-    }
-    pointerDirection(pointerDirection) {
-      this._style.pointerDirection = pointerDirection;
-      return this.self();
-    }
-    maxViewScale(maxViewScale) {
-      this._style.maxViewScale = maxViewScale;
-      return this.self();
-    }
-    minViewScale(minViewScale) {
-      this._style.minViewScale = minViewScale;
-      return this.self();
-    }
     build() {
-      return Object.assign(Object.assign({}, this._item), { type: "LABEL", text: this._text, style: this._style });
+      return Object.assign(Object.assign({}, this._item), { type: "TEXT", text: this._text });
     }
   };
 
@@ -3787,8 +3751,8 @@
     /** True if the current site is embedded in an instance of Owlbear Rodeo */
     isAvailable: Boolean(details.origin)
   };
-  function buildLabel() {
-    return new LabelBuilder(playerApi);
+  function buildText() {
+    return new TextBuilder(playerApi);
   }
   var lib_default = OBR;
 
@@ -4028,12 +3992,14 @@
   }
 
   // src/extension/labels.ts
-  var COLORS = { healthy: "#2e7d32", bloodied: "#b26a00", down: "#b71c1c" };
+  var HP_COLORS = { healthy: "#7ee081", bloodied: "#ffc04d", down: "#ff6b6b" };
+  var FONT_PER_DPI = 24 / 150;
   function infoFor(token) {
     const c = readCreature(token.metadata);
     if (!c) return null;
-    return { text: `${c.hp}/${c.maxHp}`, color: COLORS[hpBand(c)] };
+    return { text: `${c.hp}/${c.maxHp}`, color: HP_COLORS[hpBand(c)], fit: `${token.scale.x},${token.scale.y}` };
   }
+  var fitOf = (label) => label.metadata[LABEL_KEY]?.fit ?? "";
   var scheduled = false;
   var running = false;
   var again = false;
@@ -4085,12 +4051,12 @@
     for (const label of labels) {
       const parent = label.attachedTo ?? "";
       const want = wanted.get(parent);
-      if (!want || have.has(parent)) {
+      if (!want || have.has(parent) || fitOf(label) !== want.info.fit || label.type !== "TEXT") {
         stale.push(label.id);
         continue;
       }
       have.add(parent);
-      if (label.text.plainText !== want.info.text || label.style.backgroundColor !== want.info.color) {
+      if (label.text.plainText !== want.info.text || label.text.style.fillColor !== want.info.color) {
         changed.push(label);
       }
     }
@@ -4100,18 +4066,21 @@
         for (const d of drafts) {
           const info = wanted.get(d.attachedTo ?? "").info;
           d.text.plainText = info.text;
-          d.style.backgroundColor = info.color;
+          d.text.style.fillColor = info.color;
         }
       });
     }
     const missing = [...wanted.values()].filter(({ token }) => !have.has(token.id));
     if (missing.length) {
       const dpi = await lib_default.scene.grid.getDpi();
+      const font = Math.round(dpi * FONT_PER_DPI);
+      const boxHeight = Math.round(font * 1.5);
       const created = [];
       for (const { token, info } of missing) {
         const bounds = await lib_default.scene.items.getItemBounds([token.id]);
+        const boxWidth = Math.max(bounds.width, font * 5);
         created.push(
-          buildLabel().plainText(info.text).position({ x: bounds.center.x, y: bounds.max.y }).attachedTo(token.id).pointerDirection("UP").pointerHeight(0).pointerWidth(0).backgroundColor(info.color).backgroundOpacity(0.85).cornerRadius(dpi * 0.08).fillColor("#ffffff").fontWeight(700).fontSize(Math.round(dpi * 0.16)).padding(Math.round(dpi * 0.03)).locked(true).disableHit(true).disableAttachmentBehavior(["ROTATION"]).metadata({ [LABEL_KEY]: true }).build()
+          buildText().textType("PLAIN").plainText(info.text).width(boxWidth).height(boxHeight).position({ x: bounds.center.x - boxWidth / 2, y: bounds.min.y - boxHeight }).attachedTo(token.id).textAlign("CENTER").textAlignVertical("BOTTOM").fontSize(font).fontWeight(700).fillColor(info.color).strokeColor("#000000").strokeOpacity(0.85).strokeWidth(Math.max(2, Math.round(font / 6))).locked(true).disableHit(true).disableAttachmentBehavior(["ROTATION", "SCALE"]).metadata({ [LABEL_KEY]: { fit: info.fit } }).build()
         );
       }
       await lib_default.scene.local.addItems(created);

@@ -151,8 +151,19 @@ check("'+10' heals but stops at max", JSON.stringify(await hpOf()) === "[7,7]");
 await type("-9");
 check("'-9' can take HP below 0", JSON.stringify(await hpOf()) === "[-2,-2]");
 await page.waitForTimeout(300);
-const labels = await page.evaluate(() => host.state.local.map((l) => ({ for: l.attachedTo, text: l.text.plainText, bg: l.style.backgroundColor, y: l.position.y })));
-check("GM-only HP labels drawn under each goblin", labels.length === 2 && labels.every((l) => l.text === "-2/7" && l.bg === "#b71c1c" && l.y === 375), JSON.stringify(labels));
+const labels = await page.evaluate(() => host.state.local.map((l) => ({ for: l.attachedTo, type: l.type, text: l.text.plainText, fill: l.text.style.fillColor, size: l.text.style.fontSize, top: l.position.y, bottom: l.position.y + l.text.height, noScale: (l.disableAttachmentBehavior ?? []).includes("SCALE") })));
+// Tokens are 150 wide at y=300, so their top edge is y=225.
+check("GM-only HP text above each goblin, 24pt map text", labels.length === 2 && labels.every((l) => l.type === "TEXT" && l.text === "-2/7" && l.fill === "#ff6b6b" && l.size === 24 && l.bottom === 225 && l.noScale), JSON.stringify(labels[0]));
+await page.evaluate(() => {
+  host.state.items.find((i) => i.id === "g1").scale = { x: 2, y: 2 };
+  host.select(["g1", "g2"]);
+});
+// "0" damage rewrites the link, which fires the change event that re-checks labels.
+await m().locator("#hp").fill("0");
+await m().locator("#hp").press("Enter");
+await page.waitForTimeout(400);
+const resized = await page.evaluate(() => host.state.local.filter((l) => l.attachedTo === "g1").map((l) => l.metadata["com.gizmo73.obsidian-bestiary/hp-label"].fit));
+check("resized token gets its HP text re-placed", JSON.stringify(resized) === '["2,2"]', JSON.stringify(resized));
 await m().locator("body").screenshot({ path: join(tmp, "menu-hp.png") });
 await type("+3");
 check("healing from below 0 starts at 0", JSON.stringify(await hpOf()) === "[3,3]");
