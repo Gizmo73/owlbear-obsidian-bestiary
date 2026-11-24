@@ -143,6 +143,7 @@ console.log(`INFO  Chromium ${browser.version()}, Obsidian-served copy: ${s.star
 const H2 = H;
 check("token suffixes stripped", ["Goblin 2", "Goblin A", "Goblin A1", "Goblin #3", "Goblin (3)"].every((n) => H2.stripTokenSuffix(n) === "Goblin"));
 check("plain names untouched", H2.stripTokenSuffix("Adult Red Dragon") === "Adult Red Dragon" && H2.stripTokenSuffix("Ogre") === "Ogre");
+check("loose match ignores hyphens/case", H2.matchKey("Kuo Toa") === H2.matchKey("Kuo-Toa") && H2.matchKey("kuo-toa") === "kuotoa");
 check("label tried before name", JSON.stringify(H2.nameCandidates({ name: "Goblin", label: "Boss 1" })) === JSON.stringify(["Boss 1", "Boss", "Goblin"]));
 
 await browser.close();

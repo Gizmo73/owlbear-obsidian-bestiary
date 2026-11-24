@@ -49,3 +49,8 @@ export function nameCandidates(token: { name: string; label: string }): string[]
   }
   return [...new Set(out)];
 }
+
+/** Loose key for matching token names to bestiary names: "Kuo Toa" == "Kuo-Toa" == "kuo-toa". */
+export function matchKey(name: string): string {
+  return name.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]/g, "");
+}

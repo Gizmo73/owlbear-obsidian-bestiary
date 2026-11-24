@@ -4,7 +4,7 @@
 // Either route can ask us to show a creature in Fantasy Statblocks' Creature pane.
 
 import { App, Modal, Notice, Plugin } from "obsidian";
-import { BRIDGE_PORT, EXTENSION_ORIGINS, MSG_KEY, nameCandidates } from "../../shared";
+import { BRIDGE_PORT, EXTENSION_ORIGINS, MSG_KEY, matchKey, nameCandidates } from "../../shared";
 import { startBridgeServer, type BridgeServer } from "./server";
 import { WebviewRelay, type RelayStatus, type WebviewLike } from "./relay";
 import { EXTENSION_FILES } from "./embedded.gen";
@@ -180,12 +180,12 @@ export default class OwlbearBridgeSpike extends Plugin {
     const api = window.FantasyStatblocks;
     const tried: string[] = [];
     if (!api) return { creature: null, tried };
-    const byLower = new Map(api.getBestiaryNames().map((n) => [n.toLowerCase(), n]));
+    const byKey = new Map(api.getBestiaryNames().map((n) => [matchKey(n), n]));
     const first = tokens[0];
     if (!first) return { creature: null, tried };
     for (const candidate of nameCandidates(first)) {
       tried.push(candidate);
-      const match = byLower.get(candidate.toLowerCase());
+      const match = byKey.get(matchKey(candidate));
       if (!match) continue;
       const creature = api.getBestiary?.().get(match) ?? (await api.getCreature?.(match));
       const fs = (this.app as unknown as { plugins: { getPlugin(id: string): unknown } }).plugins.getPlugin(

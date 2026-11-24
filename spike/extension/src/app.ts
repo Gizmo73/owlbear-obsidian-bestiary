@@ -127,7 +127,11 @@ function handle(msg: BridgeMessage) {
       break;
     }
     case "shown": {
-      if (msg.creature) set("creature", "ok", `showing "${msg.creature}" (via ${msg.route})`);
+      if (msg.creature) {
+        // Use Obsidian's exact name for the route C link test too.
+        lastCreatureGuess = msg.creature;
+        set("creature", "ok", `showing "${msg.creature}" (via ${msg.route})`);
+      }
       else set("creature", "fail", `no bestiary match for: ${msg.tried.join(", ") || "(nothing)"}`);
       break;
     }

@@ -3641,8 +3641,10 @@
         break;
       }
       case "shown": {
-        if (msg.creature) set2("creature", "ok", `showing "${msg.creature}" (via ${msg.route})`);
-        else set2("creature", "fail", `no bestiary match for: ${msg.tried.join(", ") || "(nothing)"}`);
+        if (msg.creature) {
+          lastCreatureGuess = msg.creature;
+          set2("creature", "ok", `showing "${msg.creature}" (via ${msg.route})`);
+        } else set2("creature", "fail", `no bestiary match for: ${msg.tried.join(", ") || "(nothing)"}`);
         break;
       }
       default:
