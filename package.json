@@ -1,0 +1,21 @@
+{
+  "name": "owlbear-obsidian-bestiary",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Owlbear Rodeo extension (Obsidian Bestiary) + Obsidian plugin (Owlbear Bestiary Bridge)",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "node test/unit.mjs && node test/e2e.mjs"
+  },
+  "devDependencies": {
+    "@owlbear-rodeo/sdk": "^3.1.0",
+    "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.12",
+    "esbuild": "^0.25.10",
+    "obsidian": "^1.8.7",
+    "typescript": "^5.6.3",
+    "ws": "^8.18.0"
+  }
+}
