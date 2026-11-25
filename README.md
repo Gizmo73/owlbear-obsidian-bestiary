@@ -34,10 +34,12 @@ highlights the token and opens its statblock), then loading encounters.
 Requires Obsidian desktop with Fantasy Statblocks, and Owlbear Rodeo open in Obsidian's
 web viewer (tested with Obsidian 1.13.7).
 
-1. **Obsidian plugin**: copy `dist/owlbear-bestiary-bridge/main.js` and `manifest.json`
-   into `<vault>/.obsidian/plugins/owlbear-bestiary-bridge/`, then enable
-   *Owlbear Bestiary Bridge* in Settings → Community plugins. The status bar shows
-   `Owlbear: waiting`, then `Owlbear: connected`.
+1. **Obsidian plugin**, with [BRAT](https://github.com/TfTHacker/obsidian42-brat):
+   BRAT → *Add beta plugin* → `Gizmo73/owlbear-obsidian-bestiary` → latest version, then
+   enable *Owlbear Bestiary Bridge* in Settings → Community plugins. BRAT keeps it updated
+   from this repo's releases. (Manual alternative: copy `main.js` and `manifest.json` from the
+   latest release into `<vault>/.obsidian/plugins/owlbear-bestiary-bridge/`.)
+   The status bar shows `Owlbear: waiting`, then `Owlbear: connected`.
 2. **Owlbear extension**: Profile → Extensions → *Add Custom Extension* →
    `https://gizmo73.github.io/owlbear-obsidian-bestiary/manifest.json`, then enable it
    in your room.
@@ -52,6 +54,12 @@ npm run build       # docs/ (extension) and dist/owlbear-bestiary-bridge/ (plugi
 npm run typecheck
 npm test            # unit checks + end-to-end run against a fake Owlbear host in headless Chromium
 ```
+
+**Releasing the plugin**: bump `version` in `package.json`, run `npm run build`, commit, then
+push a bare version tag (`git tag 0.1.2 && git push origin 0.1.2`). The *Release Obsidian plugin*
+workflow builds it and publishes a GitHub release with `main.js` and `manifest.json`, which is
+what BRAT installs. Tags with a suffix (`0.2.0-beta.1`) become pre-releases. The Owlbear
+extension updates separately: GitHub Pages serves whatever is in `docs/` on the Pages branch.
 
 `Fantasy Statblocks/` and `Initiative Tracker/` hold copies of those plugins for reference.
 `spike/` is the connection test used to choose the local-connection approach; it will be removed.

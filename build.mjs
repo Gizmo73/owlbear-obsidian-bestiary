@@ -68,5 +68,12 @@ await build({
 const manifest = JSON.parse(await readFile(join(root, "src", "plugin", "manifest.json"), "utf8"));
 manifest.version = pkg.version;
 await writeFile(join(pluginOut, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+// Root manifest.json + versions.json follow the Obsidian plugin convention
+// (BRAT installs from release assets; these keep the repo ready for Obsidian's own updater).
+await writeFile(join(root, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+const versionsPath = join(root, "versions.json");
+const versions = JSON.parse(await readFile(versionsPath, "utf8").catch(() => "{}"));
+versions[manifest.version] = manifest.minAppVersion;
+await writeFile(versionsPath, JSON.stringify(versions, null, 2) + "\n");
 
 console.log(`built docs/ (extension at ${BASE}manifest.json) and dist/owlbear-bestiary-bridge/`);
