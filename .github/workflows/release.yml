@@ -1,14 +1,21 @@
 # Publishes the Obsidian plugin as a GitHub release so BRAT can install and update it.
-# To release: bump "version" in package.json, run `npm run build`, commit, then
-#   git tag <version> && git push origin <version>      (bare version, e.g. 0.1.2 - no "v")
+# To release: bump "version" in package.json, run `npm run build`, commit, then either
+#   - push a tag:  git tag <version> && git push origin <version>   (bare version, e.g. 0.1.2, no "v"), or
+#   - on GitHub: Releases -> Draft a new release -> new tag <version> on the right branch -> Publish.
+# Either way this attaches main.js and manifest.json to the release.
 name: Release Obsidian plugin
 
 on:
   push:
     tags: ["[0-9]+.[0-9]+.[0-9]+*"]
+  release:
+    types: [published]
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
 
 jobs:
   release:
@@ -29,14 +36,18 @@ jobs:
           if [ "$version" != "$GITHUB_REF_NAME" ]; then
             echo "Tag $GITHUB_REF_NAME does not match manifest version $version"; exit 1
           fi
-      - name: Create release
+      - name: Create the release, or add the files to one made on GitHub
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          flags=""
-          case "$GITHUB_REF_NAME" in *-*) flags="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" $flags \
-            --title "$GITHUB_REF_NAME" \
-            --notes "Owlbear Bestiary Bridge $GITHUB_REF_NAME. Install or update with BRAT: Gizmo73/owlbear-obsidian-bestiary" \
-            dist/owlbear-bestiary-bridge/main.js \
-            dist/owlbear-bestiary-bridge/manifest.json
+          files="dist/owlbear-bestiary-bridge/main.js dist/owlbear-bestiary-bridge/manifest.json"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" $files --clobber
+          else
+            flags=""
+            case "$GITHUB_REF_NAME" in *-*) flags="--prerelease" ;; esac
+            gh release create "$GITHUB_REF_NAME" $flags \
+              --title "$GITHUB_REF_NAME" \
+              --notes "Owlbear Bestiary Bridge $GITHUB_REF_NAME. Install or update with BRAT: Gizmo73/owlbear-obsidian-bestiary" \
+              $files
+          fi

@@ -56,8 +56,9 @@ npm test            # unit checks + end-to-end run against a fake Owlbear host i
 ```
 
 **Releasing the plugin**: bump `version` in `package.json`, run `npm run build`, commit, then
-push a bare version tag (`git tag 0.1.2 && git push origin 0.1.2`). The *Release Obsidian plugin*
-workflow builds it and publishes a GitHub release with `main.js` and `manifest.json`, which is
+either push a bare version tag (`git tag 0.1.2 && git push origin 0.1.2`) or create the release
+on GitHub (Releases → *Draft a new release* → new tag `0.1.2` on the branch → *Publish*). The
+*Release Obsidian plugin* workflow builds it and attaches `main.js` and `manifest.json`, which is
 what BRAT installs. Tags with a suffix (`0.2.0-beta.1`) become pre-releases. The Owlbear
 extension updates separately: GitHub Pages serves whatever is in `docs/` on the Pages branch.
 
