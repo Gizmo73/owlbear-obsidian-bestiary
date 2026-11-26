@@ -63,4 +63,3 @@ what BRAT installs. Tags with a suffix (`0.2.0-beta.1`) become pre-releases. The
 extension updates separately: GitHub Pages serves whatever is in `docs/` on the Pages branch.
 
 `Fantasy Statblocks/` and `Initiative Tracker/` hold copies of those plugins for reference.
-`spike/` is the connection test used to choose the local-connection approach; it will be removed.
