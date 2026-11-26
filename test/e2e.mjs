@@ -51,7 +51,9 @@ let version = H.indexVersion(entries);
 const shown = [];
 const byKey = () => new Map(entries.map((e) => [H.matchKey(e.name), e.name]));
 let ownParties = [];
+let tokenArt = {};
 const partiesPayload = () => ({
+  art: tokenArt,
   parties: [{ name: "LiS", members: ["Berald", "Dogg"], source: "initiative-tracker" }, ...ownParties.map((p) => ({ ...p, source: "bridge" }))],
   pcs: ["Berald", "Dogg", "Malakyr", ...ownParties.flatMap((p) => p.members)],
 });
@@ -73,6 +75,12 @@ const server = H.startBridgeServer({
     } else if (msg.kind === "getParties") ok(partiesPayload());
     else if (msg.kind === "saveParty") {
       ownParties = [...ownParties.filter((p) => p.name !== msg.name), { name: msg.name, members: msg.members }];
+      ok(partiesPayload());
+    } else if (msg.kind === "saveTokenArt") {
+      for (const [name, art] of Object.entries(msg.art)) {
+        if (art) tokenArt[name] = art;
+        else delete tokenArt[name];
+      }
       ok(partiesPayload());
     } else if (msg.kind === "deleteParty") {
       ownParties = ownParties.filter((p) => p.name !== msg.name);
@@ -195,11 +203,21 @@ await page.waitForTimeout(400);
 check("unlink removes link and labels", JSON.stringify(await hpOf()) === "[null,null]" && (await page.evaluate(() => host.state.local.length)) === 0);
 
 // 7. bestiary edits in Obsidian reach Owlbear
-entries = [...entries, H.toEntry({ name: "Bugbear", hp: 27, ac: 16, stats: [15, 14, 13, 8, 11, 9], cr: 1 })];
+entries = [
+  ...entries,
+  H.toEntry({ name: "Bugbear", hp: 27, ac: 16, stats: [15, 14, 13, 8, 11, 9], cr: 1 }),
+  // a creature note that shares a PC's name (like "Selestia" in the vault)
+  H.toEntry({ name: "Malakyr", hp: 4, ac: 10, stats: [10, 10, 10, 10, 10, 10], cr: 0 }),
+];
 version = H.indexVersion(entries);
 server.broadcast({ push: "bestiaryChanged", version, creatureCount: entries.length });
 await page.waitForTimeout(800);
-check("pushed bestiary change refetched", /7 creatures/.test((await connText()) ?? ""));
+check("pushed bestiary change refetched", /8 creatures/.test((await connText()) ?? ""));
+await page.evaluate(() => host.addToken("pc2", "Malakyr", 600, 600));
+const shownBefore = shown.length;
+await page.evaluate(() => host.select(["pc2"]));
+await page.waitForTimeout(400);
+check("a token named after a PC never opens the Creature pane", shown.length === shownBefore, shown.slice(shownBefore).join(","));
 
 // ------------------------------------------------------------ 8. turn order
 const P = () => frame("popover");
@@ -341,6 +359,51 @@ await P().locator("#party-form button[type=submit]").click();
 await page.waitForTimeout(500);
 check("new party saved through the plugin and applied", JSON.stringify(ownParties) === '[{"name":"Skirmish","members":["Malakyr","Zed"]}]' && (await sceneMeta("combat")).party === "Skirmish");
 check("panel offers it under 'Made in Owlbear' with Edit", (await P().locator("#party optgroup[label='Made in Owlbear'] option").allTextContents()).includes("Skirmish") && (await P().locator("#edit-party").count()) === 1);
+
+// insert the party: Malakyr's token is already on the map (named, unlinked); Zed's image is picked
+const asset = (name) => ({
+  name,
+  image: { url: `https://assets.example/${name}.png`, mime: "image/png", width: 300, height: 300 },
+  grid: { dpi: 300, offset: { x: 150, y: 150 } },
+  scale: { x: 1, y: 1 },
+  rotation: 0,
+  text: { type: "PLAIN", plainText: "", richText: [{ type: "paragraph", children: [{ text: "" }] }], style: {}, width: "AUTO", height: "AUTO" },
+  textItemType: "LABEL",
+  visible: true,
+  locked: false,
+  type: "CHARACTER",
+});
+const pcOf = (id) => page.evaluate((i) => host.state.items.find((x) => x.id === i)?.metadata["com.gizmo73.obsidian-bestiary/pc"]?.name ?? null, id);
+const byImage = (name) => page.evaluate((n) => host.state.items.filter((i) => i.image?.url?.endsWith(`/${n}.png`)), name);
+await page.evaluate((picks) => { host.state.nextPicks = picks; }, [asset("Zed"), asset("Owl Familiar")]);
+await P().locator("#insert-party").click();
+await page.waitForTimeout(700);
+let pickerCalls = await page.evaluate(() => host.state.pickerCalls);
+check("Insert party opens the picker only for PCs without a token, searched by name", pickerCalls.length === 1 && pickerCalls[0].defaultSearch === "Zed" && pickerCalls[0].multiple === true, JSON.stringify(pickerCalls));
+check("a token already named after a PC gets linked, not duplicated", (await pcOf("pc2")) === "Malakyr" && (await page.evaluate(() => host.state.items.filter((i) => i.name === "Malakyr").length)) === 1);
+const zed = await byImage("Zed");
+const owl = await byImage("Owl Familiar");
+check("picked token placed on the map, linked to the matching PC", zed.length === 1 && zed[0].layer === "CHARACTER" && zed[0].metadata["com.gizmo73.obsidian-bestiary/pc"]?.name === "Zed");
+check("a picked image matching nobody is placed unlinked", owl.length === 1 && !owl[0].metadata["com.gizmo73.obsidian-bestiary/pc"]);
+check("placed in a row at the view centre, snapped to the grid", zed[0].position.y === 375 && owl[0].position.y === 375 && zed[0].position.x !== owl[0].position.x, JSON.stringify([zed[0].position, owl[0].position]));
+check("the link is saved in the vault (plugin), only for the matched PC", Object.keys(tokenArt).join() === "Zed" && tokenArt.Zed.image.url.endsWith("/Zed.png"));
+check("panel says what happened", /Added Zed/.test(await P().locator(".notice").innerText()) && /Malakyr/.test(await P().locator(".notice").innerText()) && /Owl Familiar/.test(await P().locator(".notice").innerText()));
+await P().locator("body").screenshot({ path: join(tmp, "panel-insert.png") });
+
+// next time: no picker, straight from the saved link
+await page.evaluate(() => host.editItems((items) => { const i = items.findIndex((x) => x.image?.url?.endsWith("/Zed.png")); items.splice(i, 1); }));
+await page.waitForTimeout(300);
+await P().locator("#insert-party").click();
+await page.waitForTimeout(600);
+pickerCalls = await page.evaluate(() => host.state.pickerCalls);
+check("second Insert party uses the saved token, no picker", pickerCalls.length === 1 && (await byImage("Zed")).length === 1 && (await byImage("Zed"))[0].metadata["com.gizmo73.obsidian-bestiary/pc"]?.name === "Zed");
+await P().locator("#insert-party").click();
+await page.waitForTimeout(400);
+check("nothing duplicated when everyone is already on the map", (await byImage("Zed")).length === 1 && /already on the map/.test(await P().locator(".notice").innerText()));
+await P().locator("#repick").click();
+await page.waitForTimeout(400);
+pickerCalls = await page.evaluate(() => host.state.pickerCalls);
+check("Re-pick opens the picker for the whole party", pickerCalls.length === 2 && pickerCalls[1].defaultSearch === "");
 
 await P().locator("#end").click();
 await P().locator("#end").click();

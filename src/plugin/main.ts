@@ -12,6 +12,7 @@ import {
   type Party,
   type Push,
   type Request,
+  type TokenArt,
   type ShowResult,
   type Welcome,
 } from "../shared/protocol";
@@ -41,9 +42,11 @@ interface Settings {
   showOnSelect: boolean;
   /** Parties made in Owlbear (Initiative Tracker's own parties are read, never written). */
   parties: { name: string; members: string[] }[];
+  /** Each PC's token image in the GM's Owlbear library, for "Insert party". */
+  tokenArt: Record<string, TokenArt>;
 }
 
-const DEFAULTS: Settings = { port: DEFAULT_PORT, showOnSelect: true, parties: [] };
+const DEFAULTS: Settings = { port: DEFAULT_PORT, showOnSelect: true, parties: [], tokenArt: {} };
 
 /** The bits of Initiative Tracker's saved data we read. */
 interface InitiativeTrackerData {
@@ -62,7 +65,7 @@ export default class OwlbearBestiaryBridge extends Plugin {
   private byKey = new Map<string, string>();
 
   async onload() {
-    this.settings = { ...DEFAULTS, parties: [], ...((await this.loadData()) as Partial<Settings> | null) };
+    this.settings = { ...DEFAULTS, parties: [], tokenArt: {}, ...((await this.loadData()) as Partial<Settings> | null) };
     this.statusEl = this.addStatusBarItem();
     this.addSettingTab(new BridgeSettingTab(this.app, this));
 
@@ -162,6 +165,8 @@ export default class OwlbearBestiaryBridge extends Plugin {
         return this.saveParty(req.name, req.members);
       case "deleteParty":
         return this.deleteParty(req.name);
+      case "saveTokenArt":
+        return this.saveTokenArt(req.art);
       default:
         throw new Error(`unknown request "${(req as { kind?: string }).kind}"`);
     }
@@ -236,7 +241,22 @@ export default class OwlbearBestiaryBridge extends Plugin {
       ...fromTracker.flatMap((p) => p.members),
       ...own.flatMap((p) => p.members),
     ]);
-    return { parties: [...fromTracker, ...own], pcs: [...pcs].sort((a, b) => a.localeCompare(b)) };
+    return {
+      parties: [...fromTracker, ...own],
+      pcs: [...pcs].sort((a, b) => a.localeCompare(b)),
+      art: this.settings.tokenArt,
+    };
+  }
+
+  private async saveTokenArt(art: Record<string, TokenArt | null>): Promise<PartiesPayload> {
+    for (const [name, value] of Object.entries(art)) {
+      if (!name.trim()) continue;
+      if (value && typeof value.image?.url === "string") this.settings.tokenArt[name] = value;
+      else delete this.settings.tokenArt[name];
+    }
+    await this.saveSettings();
+    this.server?.broadcast({ push: "partiesChanged" } satisfies Push);
+    return this.parties();
   }
 
   private async saveParty(name: string, members: string[]): Promise<PartiesPayload> {

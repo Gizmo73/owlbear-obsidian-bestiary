@@ -3386,6 +3386,219 @@
   };
   var BroadcastApi_default = BroadcastApi;
 
+  // node_modules/@owlbear-rodeo/sdk/lib/builders/GenericItemBuilder.js
+  var GenericItemBuilder = class {
+    constructor(player) {
+      this._item = {
+        createdUserId: player.id,
+        id: v4_default(),
+        name: "Item",
+        zIndex: Date.now(),
+        lastModified: (/* @__PURE__ */ new Date()).toISOString(),
+        lastModifiedUserId: player.id,
+        locked: false,
+        metadata: {},
+        position: { x: 0, y: 0 },
+        rotation: 0,
+        scale: { x: 1, y: 1 },
+        type: "ITEM",
+        visible: true,
+        layer: "POPOVER"
+      };
+    }
+    createdUserId(createdUserId) {
+      this._item.createdUserId = createdUserId;
+      return this.self();
+    }
+    id(id) {
+      this._item.id = id;
+      return this.self();
+    }
+    name(name) {
+      this._item.name = name;
+      return this.self();
+    }
+    description(description) {
+      this._item.description = description;
+      return this.self();
+    }
+    lastModified(lastModified) {
+      this._item.lastModified = lastModified;
+      return this.self();
+    }
+    zIndex(zIndex) {
+      this._item.zIndex = zIndex;
+      return this.self();
+    }
+    lastModifiedUserId(lastModifiedUserId) {
+      this._item.lastModifiedUserId = lastModifiedUserId;
+      return this.self();
+    }
+    locked(locked) {
+      this._item.locked = locked;
+      return this.self();
+    }
+    metadata(metadata) {
+      this._item.metadata = metadata;
+      return this.self();
+    }
+    position(position) {
+      this._item.position = position;
+      return this.self();
+    }
+    rotation(rotation) {
+      this._item.rotation = rotation;
+      return this.self();
+    }
+    scale(scale) {
+      this._item.scale = scale;
+      return this.self();
+    }
+    visible(visible) {
+      this._item.visible = visible;
+      return this.self();
+    }
+    attachedTo(attachedTo) {
+      this._item.attachedTo = attachedTo;
+      return this.self();
+    }
+    layer(layer) {
+      this._item.layer = layer;
+      return this.self();
+    }
+    disableHit(disable) {
+      this._item.disableHit = disable;
+      return this.self();
+    }
+    disableAutoZIndex(disable) {
+      this._item.disableAutoZIndex = disable;
+      return this.self();
+    }
+    disableAttachmentBehavior(disable) {
+      this._item.disableAttachmentBehavior = disable;
+      return this.self();
+    }
+    self() {
+      return this;
+    }
+  };
+
+  // node_modules/@owlbear-rodeo/sdk/lib/builders/ImageBuilder.js
+  var ImageBuilder = class extends GenericItemBuilder {
+    constructor(player, image, grid) {
+      super(player);
+      this._image = image;
+      this._grid = grid;
+      this._item.name = "Image";
+      this._text = {
+        richText: [
+          {
+            type: "paragraph",
+            children: [{ text: "" }]
+          }
+        ],
+        plainText: "",
+        style: {
+          padding: 8,
+          fontFamily: "Roboto",
+          fontSize: 24,
+          fontWeight: 400,
+          textAlign: "CENTER",
+          textAlignVertical: "BOTTOM",
+          fillColor: "white",
+          fillOpacity: 1,
+          strokeColor: "white",
+          strokeOpacity: 1,
+          strokeWidth: 0,
+          lineHeight: 1.5
+        },
+        type: "PLAIN",
+        width: "AUTO",
+        height: "AUTO"
+      };
+      this._textItemType = "LABEL";
+    }
+    text(text) {
+      this._text = text;
+      return this.self();
+    }
+    textItemType(textItemType) {
+      this._textItemType = textItemType;
+      return this.self();
+    }
+    textWidth(width) {
+      this._text.width = width;
+      return this.self();
+    }
+    textHeight(height) {
+      this._text.height = height;
+      return this.self();
+    }
+    richText(richText) {
+      this._text.richText = richText;
+      return this.self();
+    }
+    plainText(plainText2) {
+      this._text.plainText = plainText2;
+      return this.self();
+    }
+    textType(textType) {
+      this._text.type = textType;
+      return this.self();
+    }
+    textPadding(padding) {
+      this._text.style.padding = padding;
+      return this.self();
+    }
+    fontFamily(fontFamily) {
+      this._text.style.fontFamily = fontFamily;
+      return this.self();
+    }
+    fontSize(fontSize) {
+      this._text.style.fontSize = fontSize;
+      return this.self();
+    }
+    fontWeight(fontWeight) {
+      this._text.style.fontWeight = fontWeight;
+      return this.self();
+    }
+    textAlign(textAlign) {
+      this._text.style.textAlign = textAlign;
+      return this.self();
+    }
+    textAlignVertical(textAlignVertical) {
+      this._text.style.textAlignVertical = textAlignVertical;
+      return this.self();
+    }
+    textFillColor(fillColor) {
+      this._text.style.fillColor = fillColor;
+      return this.self();
+    }
+    textFillOpacity(fillOpacity) {
+      this._text.style.fillOpacity = fillOpacity;
+      return this.self();
+    }
+    textStrokeColor(strokeColor) {
+      this._text.style.strokeColor = strokeColor;
+      return this.self();
+    }
+    textStrokeOpacity(strokeOpacity) {
+      this._text.style.strokeOpacity = strokeOpacity;
+      return this.self();
+    }
+    textStrokeWidth(strokeWidth) {
+      this._text.style.strokeWidth = strokeWidth;
+      return this.self();
+    }
+    textLineHeight(lineHeight) {
+      this._text.style.lineHeight = lineHeight;
+      return this.self();
+    }
+    build() {
+      return Object.assign(Object.assign({}, this._item), { type: "IMAGE", image: this._image, grid: this._grid, text: this._text, textItemType: this._textItemType });
+    }
+  };
+
   // node_modules/js-base64/base64.mjs
   var _TD = typeof TextDecoder === "function" ? new TextDecoder("utf-8", { ignoreBOM: true }) : void 0;
   var _TE = typeof TextEncoder === "function" ? new TextEncoder() : void 0;
@@ -3479,6 +3692,11 @@
     return { origin, roomId };
   }
 
+  // node_modules/@owlbear-rodeo/sdk/lib/types/items/Image.js
+  function isImage(item) {
+    return item.type === "IMAGE";
+  }
+
   // node_modules/@owlbear-rodeo/sdk/lib/types/items/Path.js
   var Command;
   (function(Command2) {
@@ -3537,7 +3755,58 @@
     /** True if the current site is embedded in an instance of Owlbear Rodeo */
     isAvailable: Boolean(details.origin)
   };
+  function buildImage(image, grid) {
+    return new ImageBuilder(playerApi, image, grid);
+  }
   var lib_default = OBR;
+
+  // src/shared/names.ts
+  function matchKey(name) {
+    return name.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+  function stripTokenSuffix(name) {
+    return name.trim().replace(/\s+(?:#?\d+|\(\d+\)|[A-Z]\d*)$/, "").trim();
+  }
+  function nameCandidates(token) {
+    const out = [];
+    for (const raw of [token.label, token.name]) {
+      const s = (raw ?? "").trim();
+      if (!s) continue;
+      out.push(s);
+      const stripped = stripTokenSuffix(s);
+      if (stripped && stripped !== s) out.push(stripped);
+    }
+    return [...new Set(out)];
+  }
+
+  // src/shared/party.ts
+  function matchPicks(picks, members) {
+    const matched = /* @__PURE__ */ new Map();
+    const used = /* @__PURE__ */ new Set();
+    const keysOf = (p) => [p.name, p.label ?? ""].map(matchKey).filter(Boolean);
+    for (const member of members) {
+      const key = matchKey(member);
+      const i = picks.findIndex((p, idx) => !used.has(idx) && keysOf(p).includes(key));
+      if (i !== -1) {
+        matched.set(member, i);
+        used.add(i);
+      }
+    }
+    for (const member of members) {
+      if (matched.has(member)) continue;
+      const key = matchKey(member);
+      const candidates = picks.map((p, idx) => ({ idx, keys: keysOf(p) })).filter(({ idx, keys }) => !used.has(idx) && keys.some((k) => k.startsWith(key) || key.startsWith(k)));
+      if (candidates.length === 1) {
+        matched.set(member, candidates[0].idx);
+        used.add(candidates[0].idx);
+      }
+    }
+    const unmatched = picks.map((_, i) => i).filter((i) => !used.has(i));
+    return { matched, unmatched };
+  }
+  function rowPositions(center, count, spacing) {
+    return Array.from({ length: count }, (_, i) => ({ x: center.x + (i - (count - 1) / 2) * spacing, y: center.y }));
+  }
 
   // src/shared/hp.ts
   function parseHpInput(input) {
@@ -3572,11 +3841,6 @@
     if (state2.hp <= 0) return "down";
     if (state2.hp <= state2.maxHp / 2) return "bloodied";
     return "healthy";
-  }
-
-  // src/shared/names.ts
-  function matchKey(name) {
-    return name.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]/g, "");
   }
 
   // src/shared/turns.ts
@@ -3801,6 +4065,8 @@
   var confirmEnd = false;
   var lastPartyApplied = false;
   var editingHp = null;
+  var partyNotice = "";
+  var inserting = false;
   var hpError = "";
   var esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   var ICON = {
@@ -3815,6 +4081,7 @@
     } else if (msg.type === "parties") {
       parties = msg.parties;
       partyError = msg.error ?? "";
+      if (msg.error && !formOpen) partyNotice = msg.error;
       if (!msg.error && formOpen) formOpen = null;
       void syncPartyMembers();
       render();
@@ -3847,6 +4114,101 @@
     const party = findParty(partyName);
     setLastParty(party ? party.name : null);
     await save({ party: party?.name ?? null, members: party?.members ?? [] });
+  }
+  var plainText = (text) => text?.plainText ?? "";
+  function toArt(d) {
+    return {
+      name: d.name,
+      image: { url: d.image.url, mime: d.image.mime, width: d.image.width, height: d.image.height },
+      grid: { dpi: d.grid.dpi, offset: { x: d.grid.offset.x, y: d.grid.offset.y } },
+      scale: { x: d.scale.x, y: d.scale.y },
+      rotation: d.rotation,
+      text: d.text,
+      textItemType: d.textItemType,
+      description: d.description
+    };
+  }
+  async function insertParty(repick) {
+    const members = state.members;
+    if (!members.length || inserting) return;
+    inserting = true;
+    partyNotice = "";
+    try {
+      const byKey = new Map(members.map((m) => [matchKey(m), m]));
+      const present = /* @__PURE__ */ new Set();
+      const toLink = [];
+      for (const item of await lib_default.scene.items.getItems()) {
+        const pc = readPc(item.metadata);
+        if (pc) {
+          const m = byKey.get(matchKey(pc));
+          if (m) present.add(m);
+          continue;
+        }
+        if (item.layer !== "CHARACTER" || readCreature(item.metadata)) continue;
+        const label = isImage(item) ? item.text?.plainText ?? "" : "";
+        for (const candidate of nameCandidates({ name: item.name, label })) {
+          const m = byKey.get(matchKey(candidate));
+          if (m && !present.has(m)) {
+            present.add(m);
+            toLink.push({ id: item.id, pc: m });
+            break;
+          }
+        }
+      }
+      const art = { ...parties?.art ?? {} };
+      const need = repick ? members : members.filter((m) => !present.has(m) && !art[m]);
+      const unmatched = [];
+      if (need.length) {
+        const picks = await lib_default.assets.downloadImages(true, need.length === 1 ? need[0] : "", "CHARACTER");
+        const result = matchPicks(
+          picks.map((p) => ({ name: p.name, label: plainText(p.text) })),
+          need
+        );
+        const saved = {};
+        for (const [m, i] of result.matched) saved[m] = art[m] = toArt(picks[i]);
+        for (const i of result.unmatched) unmatched.push(toArt(picks[i]));
+        if (Object.keys(saved).length) channel.post({ type: "save-art", art: saved });
+      }
+      const placing = [
+        ...members.filter((m) => !present.has(m) && art[m]).map((m) => ({ pc: m, art: art[m] })),
+        ...unmatched.map((a) => ({ pc: null, art: a }))
+      ];
+      const missing = members.filter((m) => !present.has(m) && !art[m]);
+      if (toLink.length) {
+        const pcFor = new Map(toLink.map((t) => [t.id, t.pc]));
+        await lib_default.scene.items.updateItems([...pcFor.keys()], (drafts) => {
+          for (const d of drafts) d.metadata[PC_KEY] = { name: pcFor.get(d.id) };
+        });
+      }
+      if (placing.length) {
+        const dpi = await lib_default.scene.grid.getDpi();
+        const size = (a) => a.image.width / a.grid.dpi * dpi * Math.abs(a.scale.x);
+        const spacing = Math.max(dpi, ...placing.map((p) => size(p.art)));
+        const [w, h] = await Promise.all([lib_default.viewport.getWidth(), lib_default.viewport.getHeight()]);
+        const center = await lib_default.viewport.inverseTransformPoint({ x: w / 2, y: h / 2 });
+        const spots = await Promise.all(rowPositions(center, placing.length, spacing).map((p) => lib_default.scene.grid.snapPosition(p)));
+        const tokens = placing.map(({ pc, art: a }, i) => {
+          let b = buildImage(a.image, a.grid).name(a.name).scale(a.scale).rotation(a.rotation).layer("CHARACTER").position(spots[i]).metadata(pc ? { [PC_KEY]: { name: pc } } : {});
+          if (a.text) b = b.text(a.text);
+          if (a.textItemType) b = b.textItemType(a.textItemType);
+          if (a.description) b = b.description(a.description);
+          return b.build();
+        });
+        await lib_default.scene.items.addItems(tokens);
+      }
+      const parts = [];
+      const placed = placing.filter((p) => p.pc).map((p) => p.pc);
+      if (placed.length) parts.push(`Added ${placed.join(", ")}`);
+      if (toLink.length) parts.push(`linked ${toLink.map((t) => t.pc).join(", ")} already on the map`);
+      if (unmatched.length) parts.push(`placed ${unmatched.map((a) => a.name).join(", ")} unlinked (no PC with that name)`);
+      if (missing.length) parts.push(`no token picked for ${missing.join(", ")}`);
+      partyNotice = parts.length ? `${parts.join("; ")}.` : "Everyone's already on the map.";
+    } catch (err) {
+      partyNotice = `Couldn't insert the party: ${err.message}`;
+    } finally {
+      inserting = false;
+      render();
+    }
   }
   async function selectTokens(entry) {
     const ids = entry?.tokens.map((t) => t.id) ?? [];
@@ -3950,6 +4312,11 @@
       ${party?.source === "bridge" ? `<button id="edit-party" type="button" title="Edit party">Edit</button>` : ""}
     </div>
     ${formOpen ? partyFormHtml() : ""}
+    ${state.members.length ? `<div class="bar">
+      <button id="insert-party" type="button" title="Put the party's tokens on the map, linked" ${inserting ? "disabled" : ""}>Insert party</button>
+      <button id="repick" type="button" title="Choose the party's token images again">Re-pick tokens</button>
+    </div>` : ""}
+    ${partyNotice ? `<div class="notice">${esc(partyNotice)}</div>` : ""}
     <div class="bar">
       <button id="roll" type="button" title="Roll for monsters without a number">Roll</button>
       ${started ? `<button id="prev" type="button" title="Previous turn">\u25C0</button>` : ""}
@@ -3991,6 +4358,8 @@
   function wireGm() {
     const on = (id, fn) => document.getElementById(id)?.addEventListener("click", fn);
     document.getElementById("party")?.addEventListener("change", (e) => void choose(e.target.value));
+    on("insert-party", () => void insertParty(false));
+    on("repick", () => void insertParty(true));
     on("new-party", () => {
       formOpen = { editing: null };
       partyError = "";

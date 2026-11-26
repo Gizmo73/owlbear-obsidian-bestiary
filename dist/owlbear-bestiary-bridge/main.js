@@ -3750,7 +3750,7 @@ function startBridgeServer(opts) {
 }
 
 // src/shared/protocol.ts
-var PROTOCOL_VERSION = 2;
+var PROTOCOL_VERSION = 3;
 var DEFAULT_PORT = 27190;
 var EXTENSION_ORIGINS = ["https://gizmo73.github.io"];
 
@@ -3801,7 +3801,7 @@ function matchKey(name) {
 }
 
 // src/plugin/main.ts
-var DEFAULTS = { port: DEFAULT_PORT, showOnSelect: true, parties: [] };
+var DEFAULTS = { port: DEFAULT_PORT, showOnSelect: true, parties: [], tokenArt: {} };
 var OwlbearBestiaryBridge = class extends import_obsidian.Plugin {
   constructor() {
     super(...arguments);
@@ -3815,7 +3815,7 @@ var OwlbearBestiaryBridge = class extends import_obsidian.Plugin {
     __publicField(this, "byKey", /* @__PURE__ */ new Map());
   }
   async onload() {
-    this.settings = { ...DEFAULTS, parties: [], ...await this.loadData() };
+    this.settings = { ...DEFAULTS, parties: [], tokenArt: {}, ...await this.loadData() };
     this.statusEl = this.addStatusBarItem();
     this.addSettingTab(new BridgeSettingTab(this.app, this));
     const rebuild = (0, import_obsidian.debounce)(() => this.rebuildIndex(true), 1500, true);
@@ -3904,6 +3904,8 @@ var OwlbearBestiaryBridge = class extends import_obsidian.Plugin {
         return this.saveParty(req.name, req.members);
       case "deleteParty":
         return this.deleteParty(req.name);
+      case "saveTokenArt":
+        return this.saveTokenArt(req.art);
       default:
         throw new Error(`unknown request "${req.kind}"`);
     }
@@ -3972,7 +3974,21 @@ var OwlbearBestiaryBridge = class extends import_obsidian.Plugin {
       ...fromTracker.flatMap((p) => p.members),
       ...own.flatMap((p) => p.members)
     ]);
-    return { parties: [...fromTracker, ...own], pcs: [...pcs].sort((a, b) => a.localeCompare(b)) };
+    return {
+      parties: [...fromTracker, ...own],
+      pcs: [...pcs].sort((a, b) => a.localeCompare(b)),
+      art: this.settings.tokenArt
+    };
+  }
+  async saveTokenArt(art) {
+    for (const [name, value] of Object.entries(art)) {
+      if (!name.trim()) continue;
+      if (value && typeof value.image?.url === "string") this.settings.tokenArt[name] = value;
+      else delete this.settings.tokenArt[name];
+    }
+    await this.saveSettings();
+    this.server?.broadcast({ push: "partiesChanged" });
+    return this.parties();
   }
   async saveParty(name, members) {
     const clean = name.trim();

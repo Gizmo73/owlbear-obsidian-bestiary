@@ -7,8 +7,8 @@
 
 import OBR, { isImage, type Item } from "@owlbear-rodeo/sdk";
 import { BestiarySearch } from "../shared/search";
-import { nameCandidates } from "../shared/names";
-import type { PartiesPayload } from "../shared/protocol";
+import { matchKey, nameCandidates } from "../shared/names";
+import type { PartiesPayload, TokenArt } from "../shared/protocol";
 import { buildEntries, nextNumbers, publicOrder } from "../shared/turns";
 import { BridgeClient } from "./bridge";
 import { startLabels } from "./labels";
@@ -76,6 +76,9 @@ function onChannel(msg: ChannelMessage) {
     case "delete-party":
       void partyRequest({ kind: "deleteParty", name: msg.name });
       break;
+    case "save-art":
+      void partyRequest({ kind: "saveTokenArt", art: msg.art }, 3);
+      break;
     default:
       break;
   }
@@ -97,7 +100,7 @@ async function fetchBestiary() {
   }
 }
 
-const partiesSupported = () => !!bridge?.connected && (status.protocol ?? 1) >= 2;
+const partiesSupported = (protocol = 2) => !!bridge?.connected && (status.protocol ?? 1) >= protocol;
 
 async function fetchParties() {
   if (!partiesSupported()) return;
@@ -110,12 +113,19 @@ async function fetchParties() {
   }
 }
 
-async function partyRequest(req: { kind: "saveParty"; name: string; members: string[] } | { kind: "deleteParty"; name: string }) {
-  if (!partiesSupported()) {
+async function partyRequest(
+  req:
+    | { kind: "saveParty"; name: string; members: string[] }
+    | { kind: "deleteParty"; name: string }
+    | { kind: "saveTokenArt"; art: Record<string, TokenArt | null> },
+  protocol = 2,
+) {
+  if (!partiesSupported(protocol)) {
+    const what = req.kind === "saveTokenArt" ? "remember party tokens" : "save parties";
     channel.post({
       type: "parties",
       parties,
-      error: bridge?.connected ? "Update Owlbear Bestiary Bridge in Obsidian to save parties" : "Connect to Obsidian to save parties",
+      error: bridge?.connected ? `Update Owlbear Bestiary Bridge in Obsidian to ${what}` : `Connect to Obsidian to ${what}`,
     });
     return;
   }
@@ -151,7 +161,11 @@ async function onSelection(ids: string[] | undefined) {
   if (name) await showInObsidian(name);
 }
 
-/** Linked token wins; otherwise a single unlinked character token whose name matches a creature. */
+/**
+ * Linked monster token wins; otherwise a single unlinked character token whose name matches
+ * a creature. PCs never open the Creature pane: not when linked to a PC, and not when the
+ * token is named after a party member (even if a creature note shares the name).
+ */
 function creatureNameFor(items: Item[]): string | null {
   for (const item of items) {
     const c = readCreature(item.metadata);
@@ -160,7 +174,10 @@ function creatureNameFor(items: Item[]): string | null {
   const only = items.length === 1 ? items[0] : null;
   if (!only || only.layer !== "CHARACTER" || !search || readPc(only.metadata)) return null;
   const label = isImage(only) ? (only.text?.plainText ?? "") : "";
-  for (const candidate of nameCandidates({ name: only.name, label })) {
+  const candidates = nameCandidates({ name: only.name, label });
+  const pcKeys = new Set((parties?.pcs ?? []).map(matchKey));
+  if (candidates.some((c) => pcKeys.has(matchKey(c)))) return null;
+  for (const candidate of candidates) {
     const hit = search.find(candidate);
     if (hit) return hit.name;
   }

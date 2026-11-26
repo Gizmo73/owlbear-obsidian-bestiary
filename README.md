@@ -29,6 +29,11 @@ Two parts work together:
 **Turn order** (toolbar icon → panel)
 - Pick a party: Initiative Tracker's parties are listed, and you can make new ones in the
   panel (saved in the bridge plugin's settings). The last party is remembered.
+- *Insert party* puts the party's tokens on the map in a row at the centre of your view,
+  already linked. The first time, Owlbear's asset picker opens: tick your PC tokens and they're
+  matched to PCs by name ("Berald" or "Berald Barclay" → Berald). The link from PC to image is
+  saved in your vault, so after that it's one click. PCs already on the map are skipped (a token
+  just named after a PC gets linked instead). *Re-pick tokens* chooses the images again.
 - Every token has its own row and turn, but *Roll* gives each creature type one shared roll
   (d20 + Dex), so Goblin 1, 2 and 3 act back to back. A goblin added mid-fight joins their roll.
   Type the PCs' rolls; any number can be edited. Ties go to monsters.
