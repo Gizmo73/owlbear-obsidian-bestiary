@@ -4116,6 +4116,37 @@
     await save({ party: party?.name ?? null, members: party?.members ?? [] });
   }
   var plainText = (text) => text?.plainText ?? "";
+  function describeError(err) {
+    if (err instanceof Error) return err.message;
+    if (typeof err === "string") return err;
+    const message = err?.message ?? err?.error;
+    if (typeof message === "string") return message;
+    try {
+      return JSON.stringify(err) ?? String(err);
+    } catch {
+      return String(err);
+    }
+  }
+  function artFromItem(item) {
+    return toArt({ ...item, type: "CHARACTER" });
+  }
+  async function pickImages(search) {
+    const attempts = [
+      () => lib_default.assets.downloadImages(true, search || void 0, "CHARACTER"),
+      () => lib_default.assets.downloadImages(true),
+      () => lib_default.assets.downloadImages()
+    ];
+    let error = "";
+    for (const attempt of attempts) {
+      try {
+        return { picks: await attempt() ?? [] };
+      } catch (err) {
+        error = describeError(err);
+        console.warn("[obsidian-bestiary] asset picker failed:", err);
+      }
+    }
+    return { picks: [], error };
+  }
   function toArt(d) {
     return {
       name: d.name,
@@ -4137,11 +4168,19 @@
       const byKey = new Map(members.map((m) => [matchKey(m), m]));
       const present = /* @__PURE__ */ new Set();
       const toLink = [];
+      const art = { ...parties?.art ?? {} };
+      const saved = {};
+      const learn = (m, item) => {
+        if (!art[m] && isImage(item) && item.image?.url) saved[m] = art[m] = artFromItem(item);
+      };
       for (const item of await lib_default.scene.items.getItems()) {
         const pc = readPc(item.metadata);
         if (pc) {
           const m = byKey.get(matchKey(pc));
-          if (m) present.add(m);
+          if (m) {
+            present.add(m);
+            learn(m, item);
+          }
           continue;
         }
         if (item.layer !== "CHARACTER" || readCreature(item.metadata)) continue;
@@ -4151,24 +4190,25 @@
           if (m && !present.has(m)) {
             present.add(m);
             toLink.push({ id: item.id, pc: m });
+            learn(m, item);
             break;
           }
         }
       }
-      const art = { ...parties?.art ?? {} };
       const need = repick ? members : members.filter((m) => !present.has(m) && !art[m]);
       const unmatched = [];
+      let pickerError = "";
       if (need.length) {
-        const picks = await lib_default.assets.downloadImages(true, need.length === 1 ? need[0] : "", "CHARACTER");
+        const { picks, error } = await pickImages(need.length === 1 ? need[0] : "");
+        pickerError = error ?? "";
         const result = matchPicks(
           picks.map((p) => ({ name: p.name, label: plainText(p.text) })),
           need
         );
-        const saved = {};
         for (const [m, i] of result.matched) saved[m] = art[m] = toArt(picks[i]);
         for (const i of result.unmatched) unmatched.push(toArt(picks[i]));
-        if (Object.keys(saved).length) channel.post({ type: "save-art", art: saved });
       }
+      if (Object.keys(saved).length) channel.post({ type: "save-art", art: saved });
       const placing = [
         ...members.filter((m) => !present.has(m) && art[m]).map((m) => ({ pc: m, art: art[m] })),
         ...unmatched.map((a) => ({ pc: null, art: a }))
@@ -4201,10 +4241,15 @@
       if (placed.length) parts.push(`Added ${placed.join(", ")}`);
       if (toLink.length) parts.push(`linked ${toLink.map((t) => t.pc).join(", ")} already on the map`);
       if (unmatched.length) parts.push(`placed ${unmatched.map((a) => a.name).join(", ")} unlinked (no PC with that name)`);
-      if (missing.length) parts.push(`no token picked for ${missing.join(", ")}`);
+      if (missing.length && !pickerError) parts.push(`no token picked for ${missing.join(", ")}`);
+      if (pickerError) {
+        parts.push(
+          `Owlbear's token picker didn't open (${pickerError}). Drag ${missing.length ? missing.join(", ") : "the party"} onto the map from your library once and press Insert party again: it will remember them`
+        );
+      }
       partyNotice = parts.length ? `${parts.join("; ")}.` : "Everyone's already on the map.";
     } catch (err) {
-      partyNotice = `Couldn't insert the party: ${err.message}`;
+      partyNotice = `Couldn't insert the party: ${describeError(err)}`;
     } finally {
       inserting = false;
       render();

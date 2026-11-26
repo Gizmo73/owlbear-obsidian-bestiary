@@ -2,7 +2,7 @@
 // GM: turn order (party, rolls, Start / Next / Previous, hold, click to select, HP) + connection details.
 // Players: the turn order only (names and whose turn it is, never HP).
 
-import OBR, { buildImage, isImage, type ImageDownload, type Item, type TextContent } from "@owlbear-rodeo/sdk";
+import OBR, { buildImage, isImage, type Image, type ImageDownload, type Item, type TextContent } from "@owlbear-rodeo/sdk";
 import type { Party, PartiesPayload, TokenArt } from "../shared/protocol";
 import { matchKey, nameCandidates } from "../shared/names";
 import { matchPicks, rowPositions } from "../shared/party";
@@ -120,6 +120,46 @@ async function choose(partyName: string) {
 
 const plainText = (text: unknown) => (text as { plainText?: string } | undefined)?.plainText ?? "";
 
+/** Owlbear rejects some calls with plain objects or strings rather than Errors. */
+function describeError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  const message = (err as { message?: unknown; error?: unknown } | null)?.message ?? (err as { error?: unknown } | null)?.error;
+  if (typeof message === "string") return message;
+  try {
+    return JSON.stringify(err) ?? String(err);
+  } catch {
+    return String(err);
+  }
+}
+
+/** A token already on the map, as saved art (so the next insert can recreate it). */
+function artFromItem(item: Image): TokenArt {
+  return toArt({ ...item, type: "CHARACTER" } as unknown as ImageDownload);
+}
+
+/**
+ * Open Owlbear's asset picker. Tries the full request first, then plainer ones in case this
+ * Owlbear version rejects the search text or type hint. Returns the error text if all fail.
+ */
+async function pickImages(search: string): Promise<{ picks: ImageDownload[]; error?: string }> {
+  const attempts: (() => Promise<ImageDownload[]>)[] = [
+    () => OBR.assets.downloadImages(true, search || undefined, "CHARACTER"),
+    () => OBR.assets.downloadImages(true),
+    () => OBR.assets.downloadImages(),
+  ];
+  let error = "";
+  for (const attempt of attempts) {
+    try {
+      return { picks: (await attempt()) ?? [] };
+    } catch (err) {
+      error = describeError(err);
+      console.warn("[obsidian-bestiary] asset picker failed:", err);
+    }
+  }
+  return { picks: [], error };
+}
+
 function toArt(d: ImageDownload): TokenArt {
   return {
     name: d.name,
@@ -148,11 +188,20 @@ async function insertParty(repick: boolean) {
     const byKey = new Map(members.map((m) => [matchKey(m), m]));
     const present = new Set<string>();
     const toLink: { id: string; pc: string }[] = [];
+    const art: Record<string, TokenArt> = { ...(parties?.art ?? {}) };
+    // PCs already on the map teach us their token, so next time they can be inserted.
+    const saved: Record<string, TokenArt> = {};
+    const learn = (m: string, item: Item) => {
+      if (!art[m] && isImage(item) && item.image?.url) saved[m] = art[m] = artFromItem(item);
+    };
     for (const item of await OBR.scene.items.getItems()) {
       const pc = readPc(item.metadata);
       if (pc) {
         const m = byKey.get(matchKey(pc));
-        if (m) present.add(m);
+        if (m) {
+          present.add(m);
+          learn(m, item);
+        }
         continue;
       }
       if (item.layer !== "CHARACTER" || readCreature(item.metadata)) continue;
@@ -162,25 +211,26 @@ async function insertParty(repick: boolean) {
         if (m && !present.has(m)) {
           present.add(m);
           toLink.push({ id: item.id, pc: m });
+          learn(m, item);
           break;
         }
       }
     }
 
-    const art: Record<string, TokenArt> = { ...(parties?.art ?? {}) };
     const need = repick ? members : members.filter((m) => !present.has(m) && !art[m]);
     const unmatched: TokenArt[] = [];
+    let pickerError = "";
     if (need.length) {
-      const picks = await OBR.assets.downloadImages(true, need.length === 1 ? need[0] : "", "CHARACTER");
+      const { picks, error } = await pickImages(need.length === 1 ? need[0] : "");
+      pickerError = error ?? "";
       const result = matchPicks(
         picks.map((p) => ({ name: p.name, label: plainText(p.text) })),
         need,
       );
-      const saved: Record<string, TokenArt> = {};
       for (const [m, i] of result.matched) saved[m] = art[m] = toArt(picks[i]);
       for (const i of result.unmatched) unmatched.push(toArt(picks[i]));
-      if (Object.keys(saved).length) channel.post({ type: "save-art", art: saved });
     }
+    if (Object.keys(saved).length) channel.post({ type: "save-art", art: saved });
 
     const placing = [
       ...members.filter((m) => !present.has(m) && art[m]).map((m) => ({ pc: m as string | null, art: art[m] })),
@@ -222,10 +272,16 @@ async function insertParty(repick: boolean) {
     if (placed.length) parts.push(`Added ${placed.join(", ")}`);
     if (toLink.length) parts.push(`linked ${toLink.map((t) => t.pc).join(", ")} already on the map`);
     if (unmatched.length) parts.push(`placed ${unmatched.map((a) => a.name).join(", ")} unlinked (no PC with that name)`);
-    if (missing.length) parts.push(`no token picked for ${missing.join(", ")}`);
+    if (missing.length && !pickerError) parts.push(`no token picked for ${missing.join(", ")}`);
+    if (pickerError) {
+      parts.push(
+        `Owlbear's token picker didn't open (${pickerError}). Drag ${missing.length ? missing.join(", ") : "the party"} ` +
+          "onto the map from your library once and press Insert party again: it will remember them",
+      );
+    }
     partyNotice = parts.length ? `${parts.join("; ")}.` : "Everyone's already on the map.";
   } catch (err) {
-    partyNotice = `Couldn't insert the party: ${(err as Error).message}`;
+    partyNotice = `Couldn't insert the party: ${describeError(err)}`;
   } finally {
     inserting = false;
     render();

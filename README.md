@@ -34,6 +34,8 @@ Two parts work together:
   matched to PCs by name ("Berald" or "Berald Barclay" → Berald). The link from PC to image is
   saved in your vault, so after that it's one click. PCs already on the map are skipped (a token
   just named after a PC gets linked instead). *Re-pick tokens* chooses the images again.
+  PC tokens already on the map are remembered too, so dragging the party in from your library
+  once is another way to set it up.
 - Every token has its own row and turn, but *Roll* gives each creature type one shared roll
   (d20 + Dex), so Goblin 1, 2 and 3 act back to back. A goblin added mid-fight joins their roll.
   Type the PCs' rolls; any number can be edited. Ties go to monsters.

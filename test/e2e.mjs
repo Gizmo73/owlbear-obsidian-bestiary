@@ -403,7 +403,31 @@ check("nothing duplicated when everyone is already on the map", (await byImage("
 await P().locator("#repick").click();
 await page.waitForTimeout(400);
 pickerCalls = await page.evaluate(() => host.state.pickerCalls);
-check("Re-pick opens the picker for the whole party", pickerCalls.length === 2 && pickerCalls[1].defaultSearch === "");
+check("Re-pick opens the picker for the whole party", pickerCalls.length === 2 && !pickerCalls[1].defaultSearch);
+
+// when Owlbear refuses the picker: say why, and learn tokens from the map instead
+await P().locator("#party").selectOption("LiS"); // Berald (on the map) + Dogg (no token yet)
+await page.waitForTimeout(300);
+await page.evaluate(() => { host.state.pickerError = { code: "ASSETS_UNAVAILABLE" }; });
+await P().locator("#insert-party").click();
+await page.waitForTimeout(600);
+let notice = await P().locator(".notice").innerText();
+pickerCalls = await page.evaluate(() => host.state.pickerCalls);
+check("picker failure shows Owlbear's actual error, after plainer retries", /ASSETS_UNAVAILABLE/.test(notice) && !/undefined/.test(notice) && pickerCalls.length === 5, notice);
+check("...and says how to get going without it", /Drag Dogg onto the map/.test(notice));
+await page.evaluate((a) => {
+  host.state.pickerError = null;
+  host.addToken("dogg", "Dogg", 900, 600);
+  Object.assign(host.state.items.find((i) => i.id === "dogg"), { image: a.image, grid: a.grid });
+}, asset("Dogg"));
+await P().locator("#insert-party").click();
+await page.waitForTimeout(500);
+check("dragged-in token gets linked and its image remembered in the vault", (await pcOf("dogg")) === "Dogg" && tokenArt.Dogg?.image?.url.endsWith("/Dogg.png"));
+await page.evaluate(() => host.editItems((items) => items.splice(items.findIndex((i) => i.id === "dogg"), 1)));
+await page.waitForTimeout(300);
+await P().locator("#insert-party").click();
+await page.waitForTimeout(500);
+check("next Insert party recreates it from the remembered image, no picker", (await byImage("Dogg")).length === 1 && (await byImage("Dogg"))[0].metadata["com.gizmo73.obsidian-bestiary/pc"]?.name === "Dogg" && (await page.evaluate(() => host.state.pickerCalls.length)) === 5);
 
 await P().locator("#end").click();
 await P().locator("#end").click();
