@@ -3923,6 +3923,7 @@
       const id = tokenEntryId(t.id);
       const entry = make(id, "monster", monsterName(t.creature, t.n, siblings.get(group)), t.mod, group);
       entry.tokens.push({ id: t.id, hp: t.hp, maxHp: t.maxHp, visible: t.visible });
+      if (!t.visible) entry.held = true;
       entry.down = t.hp <= 0;
       byId.set(id, entry);
     }

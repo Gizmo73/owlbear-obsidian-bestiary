@@ -100,6 +100,7 @@ eq("public order: no HP, hidden-on-map tokens left out", S.publicOrder(ents, { .
   round: 1,
   entries: [{ name: "Goblin 1", active: true }, { name: "Berald", active: false }, { name: "Dogg", active: false }],
 });
+eq("a monster hidden on the map is held; a visible one isn't", S.buildEntries([mon("g1", "Goblin", 1, 2, 10, false), mon("g2", "Goblin", 2, 2)], [], S.EMPTY_COMBAT).map((e) => e.held), [true, false]);
 eq("numbering fills gaps", [S.nextNumbers([1, 3], 2), S.nextNumbers([], 3)], [[2, 4], [1, 2, 3]]);
 eq("numeric sort: Goblin 2 before Goblin 10", S.buildEntries([mon("a", "Goblin", 10, 2), mon("b", "Goblin", 2, 2)], [], { ...S.EMPTY_COMBAT, init: { "t:a": 5, "t:b": 5 } }).map((e) => e.name), ["Goblin 2", "Goblin 10"]);
 eq("nothing rolled: no turn", S.step(S.buildEntries([mon("g1", "Goblin", 1, 2)], [], S.EMPTY_COMBAT), S.EMPTY_COMBAT, 1), { turn: null, round: 0 });

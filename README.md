@@ -43,8 +43,10 @@ Two parts work together:
 - *Start* / *Next* / *Previous*: the active token gets a gold ring (only you see it), are
   selected so you can move them straight away, and their statblock opens in the Creature pane.
   Rounds are counted. Clicking a row's name selects its token too.
-- The eye button holds a creature back (not in combat yet): it's skipped and players don't see it.
-  Monsters at 0 HP or below are greyed out and skipped.
+- The eye button on a monster hides or reveals its token for players, and it works the other way
+  too: hide a token on the map and the panel greys it out. Hidden monsters haven't joined the
+  fight: they're skipped and left out of the players' list. On a PC, the eye just holds them
+  back. Monsters at 0 HP or below are greyed out and skipped.
 - **Players** see the same panel as a plain list: names and whose turn it is, never HP.
   Held, downed and hidden-on-the-map monsters are left out.
 

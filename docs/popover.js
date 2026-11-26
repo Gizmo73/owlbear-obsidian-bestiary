@@ -3877,6 +3877,7 @@
       const id = tokenEntryId(t.id);
       const entry = make(id, "monster", monsterName(t.creature, t.n, siblings.get(group)), t.mod, group);
       entry.tokens.push({ id: t.id, hp: t.hp, maxHp: t.maxHp, visible: t.visible });
+      if (!t.visible) entry.held = true;
       entry.down = t.hp <= 0;
       byId.set(id, entry);
     }
@@ -4283,6 +4284,35 @@
     const turn = state.turn && legacy(state.turn) ? entries().find((e) => e.group === state.turn)?.id ?? null : state.turn;
     await save({ init, held, turn });
   }
+  async function migrateHeldMonsters() {
+    if (role !== "GM") return;
+    const monsterIds = (id) => id.startsWith("t:") || id.startsWith("m:");
+    if (!state.held.some(monsterIds)) return;
+    const tokens = entries().filter((e) => e.kind === "monster" && (state.held.includes(e.id) || state.held.includes(e.group))).flatMap((e) => e.tokens.map((t) => t.id));
+    if (tokens.length) {
+      await lib_default.scene.items.updateItems(tokens, (drafts) => {
+        for (const d of drafts) d.visible = false;
+      });
+    }
+    await save({ held: state.held.filter((id) => !monsterIds(id)) });
+  }
+  async function toggleHeld(entry) {
+    if (entry.kind === "monster") {
+      const show = entry.held;
+      await lib_default.scene.items.updateItems(
+        entry.tokens.map((t) => t.id),
+        (drafts) => {
+          for (const d of drafts) d.visible = show;
+        }
+      );
+      if (state.held.includes(entry.id) || state.held.includes(entry.group)) {
+        await save({ held: state.held.filter((id) => id !== entry.id && id !== entry.group) });
+      }
+      return;
+    }
+    const held = entry.held ? state.held.filter((id) => id !== entry.id) : [...state.held, entry.id];
+    await save({ held });
+  }
   async function applyHpTo(entry, value) {
     const op = parseHpInput(value);
     if (!op) {
@@ -4341,7 +4371,7 @@
       <button class="name" type="button" title="Select on the map">${esc(displayName(e))}</button>
       ${hps}
       ${e.kind === "monster" ? `<button class="icon reroll" type="button" title="Roll d20 ${e.mod >= 0 ? "+" : ""}${e.mod}">${ICON.dice}</button>` : `<span class="icon-spacer"></span>`}
-      <button class="icon hold" type="button" title="${e.held ? "Not in combat yet: click to join" : "In combat: click to hold back"}">${e.held ? ICON.eyeOff : ICON.eye}</button>
+      <button class="icon hold" type="button" title="${e.kind === "monster" ? e.held ? "Hidden from players, not in the fight yet: click to reveal" : "Visible to players: click to hide (and skip)" : e.held ? "Not in combat yet: click to join" : "In combat: click to hold back"}">${e.held ? ICON.eyeOff : ICON.eye}</button>
     </li>`;
   }
   function gmHtml() {
@@ -4473,10 +4503,7 @@
       });
       li.querySelector(".name")?.addEventListener("click", () => void selectTokens(entry));
       li.querySelector(".reroll")?.addEventListener("click", () => void save({ init: { ...state.init, [entry.id]: rollD20() + entry.mod } }));
-      li.querySelector(".hold")?.addEventListener("click", () => {
-        const held = entry.held ? state.held.filter((id) => id !== entry.id && id !== entry.group) : [...state.held, entry.id];
-        void save({ held });
-      });
+      li.querySelector(".hold")?.addEventListener("click", () => void toggleHeld(entry));
       li.querySelector(".chip")?.addEventListener("click", () => {
         editingHp = entry.id;
         hpError = "";
@@ -4552,6 +4579,7 @@
     });
     if (await lib_default.scene.isReady()) await load();
     await migrateGroupKeys();
+    await migrateHeldMonsters();
     await syncPartyMembers();
   });
 })();

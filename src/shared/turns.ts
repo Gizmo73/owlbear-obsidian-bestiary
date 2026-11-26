@@ -5,6 +5,7 @@
 //   same creature share one roll, so they act back to back.
 // - PCs come from the chosen party (plus any token linked to a PC); the GM types their rolls.
 // - Held entries ("not in combat yet") and downed monsters are skipped and hidden from players.
+//   A monster is held exactly when its token is hidden from players on the map.
 // - Players only ever get names and whose turn it is: never HP.
 
 import { matchKey } from "./names";
@@ -19,7 +20,7 @@ export interface CombatState {
   members: string[];
   /** Entry id -> initiative total. */
   init: Record<string, number>;
-  /** Entry ids that haven't joined the combat yet. */
+  /** PC entry ids that haven't joined the combat yet (monsters use token visibility instead). */
   held: string[];
 }
 
@@ -115,6 +116,8 @@ export function buildEntries(monsters: MonsterToken[], pcTokens: PcToken[], stat
     const id = tokenEntryId(t.id);
     const entry = make(id, "monster", monsterName(t.creature, t.n, siblings.get(group)!), t.mod, group);
     entry.tokens.push({ id: t.id, hp: t.hp, maxHp: t.maxHp, visible: t.visible });
+    // Hidden on the map = not in the fight yet.
+    if (!t.visible) entry.held = true;
     entry.down = t.hp <= 0;
     byId.set(id, entry);
   }
