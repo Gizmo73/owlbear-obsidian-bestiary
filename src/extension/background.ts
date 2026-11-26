@@ -8,7 +8,7 @@
 import OBR, { isImage, type Item } from "@owlbear-rodeo/sdk";
 import { BestiarySearch } from "../shared/search";
 import { matchKey, nameCandidates } from "../shared/names";
-import type { PartiesPayload } from "../shared/protocol";
+import type { PartiesPayload, TokenArt } from "../shared/protocol";
 import { buildEntries, nextNumbers, publicOrder } from "../shared/turns";
 import { BridgeClient } from "./bridge";
 import { startLabels } from "./labels";
@@ -76,6 +76,9 @@ function onChannel(msg: ChannelMessage) {
     case "delete-party":
       void partyRequest({ kind: "deleteParty", name: msg.name });
       break;
+    case "save-art":
+      void partyRequest({ kind: "saveTokenArt", art: msg.art }, 3);
+      break;
     default:
       break;
   }
@@ -97,7 +100,7 @@ async function fetchBestiary() {
   }
 }
 
-const partiesSupported = () => !!bridge?.connected && (status.protocol ?? 1) >= 2;
+const partiesSupported = (protocol = 2) => !!bridge?.connected && (status.protocol ?? 1) >= protocol;
 
 async function fetchParties() {
   if (!partiesSupported()) return;
@@ -110,12 +113,19 @@ async function fetchParties() {
   }
 }
 
-async function partyRequest(req: { kind: "saveParty"; name: string; members: string[] } | { kind: "deleteParty"; name: string }) {
-  if (!partiesSupported()) {
+async function partyRequest(
+  req:
+    | { kind: "saveParty"; name: string; members: string[] }
+    | { kind: "deleteParty"; name: string }
+    | { kind: "saveTokenArt"; art: Record<string, TokenArt | null> },
+  protocol = 2,
+) {
+  if (!partiesSupported(protocol)) {
+    const what = req.kind === "saveTokenArt" ? "remember party tokens" : "save parties";
     channel.post({
       type: "parties",
       parties,
-      error: bridge?.connected ? "Update Owlbear Bestiary Bridge in Obsidian to save parties" : "Connect to Obsidian to save parties",
+      error: bridge?.connected ? `Update Owlbear Bestiary Bridge in Obsidian to ${what}` : `Connect to Obsidian to ${what}`,
     });
     return;
   }

@@ -2,8 +2,10 @@
 // GM: turn order (party, rolls, Start / Next / Previous, hold, click to select, HP) + connection details.
 // Players: the turn order only (names and whose turn it is, never HP).
 
-import OBR, { type Item } from "@owlbear-rodeo/sdk";
-import type { Party, PartiesPayload } from "../shared/protocol";
+import OBR, { buildImage, isImage, type ImageDownload, type Item, type TextContent } from "@owlbear-rodeo/sdk";
+import type { Party, PartiesPayload, TokenArt } from "../shared/protocol";
+import { matchKey, nameCandidates } from "../shared/names";
+import { matchPicks, rowPositions } from "../shared/party";
 import { applyHp, hpBand, parseHpInput } from "../shared/hp";
 import {
   EMPTY_COMBAT,
@@ -18,6 +20,7 @@ import {
 } from "../shared/turns";
 import {
   COMBAT_KEY,
+  PC_KEY,
   TOKEN_KEY,
   combatTokens,
   getLastParty,
@@ -27,6 +30,7 @@ import {
   readCombat,
   readCreature,
   readOrder,
+  readPc,
   setLastParty,
   setPort,
   type BridgeStatus,
@@ -47,6 +51,8 @@ let confirmEnd = false;
 let lastPartyApplied = false;
 /** Entry whose HP box is open. */
 let editingHp: string | null = null;
+let partyNotice = "";
+let inserting = false;
 let hpError = "";
 
 const esc = (s: string) =>
@@ -67,6 +73,7 @@ const channel = openChannel((msg: ChannelMessage) => {
   } else if (msg.type === "parties") {
     parties = msg.parties;
     partyError = msg.error ?? "";
+    if (msg.error && !formOpen) partyNotice = msg.error;
     if (!msg.error && formOpen) formOpen = null;
     void syncPartyMembers();
     render();
@@ -107,6 +114,122 @@ async function choose(partyName: string) {
   const party = findParty(partyName);
   setLastParty(party ? party.name : null);
   await save({ party: party?.name ?? null, members: party?.members ?? [] });
+}
+
+// ------------------------------------------------------------ insert party
+
+const plainText = (text: unknown) => (text as { plainText?: string } | undefined)?.plainText ?? "";
+
+function toArt(d: ImageDownload): TokenArt {
+  return {
+    name: d.name,
+    image: { url: d.image.url, mime: d.image.mime, width: d.image.width, height: d.image.height },
+    grid: { dpi: d.grid.dpi, offset: { x: d.grid.offset.x, y: d.grid.offset.y } },
+    scale: { x: d.scale.x, y: d.scale.y },
+    rotation: d.rotation,
+    text: d.text,
+    textItemType: d.textItemType,
+    description: d.description,
+  };
+}
+
+/**
+ * Put the chosen party's PCs on the map, linked. PCs already on the map are skipped (and
+ * linked, if they're only named after the PC). Images come from the saved links in the vault;
+ * any PC without one, or everyone with `repick`, is chosen in Owlbear's asset picker and
+ * matched by name. Picked images that match nobody are placed unlinked.
+ */
+async function insertParty(repick: boolean) {
+  const members = state.members;
+  if (!members.length || inserting) return;
+  inserting = true;
+  partyNotice = "";
+  try {
+    const byKey = new Map(members.map((m) => [matchKey(m), m]));
+    const present = new Set<string>();
+    const toLink: { id: string; pc: string }[] = [];
+    for (const item of await OBR.scene.items.getItems()) {
+      const pc = readPc(item.metadata);
+      if (pc) {
+        const m = byKey.get(matchKey(pc));
+        if (m) present.add(m);
+        continue;
+      }
+      if (item.layer !== "CHARACTER" || readCreature(item.metadata)) continue;
+      const label = isImage(item) ? (item.text?.plainText ?? "") : "";
+      for (const candidate of nameCandidates({ name: item.name, label })) {
+        const m = byKey.get(matchKey(candidate));
+        if (m && !present.has(m)) {
+          present.add(m);
+          toLink.push({ id: item.id, pc: m });
+          break;
+        }
+      }
+    }
+
+    const art: Record<string, TokenArt> = { ...(parties?.art ?? {}) };
+    const need = repick ? members : members.filter((m) => !present.has(m) && !art[m]);
+    const unmatched: TokenArt[] = [];
+    if (need.length) {
+      const picks = await OBR.assets.downloadImages(true, need.length === 1 ? need[0] : "", "CHARACTER");
+      const result = matchPicks(
+        picks.map((p) => ({ name: p.name, label: plainText(p.text) })),
+        need,
+      );
+      const saved: Record<string, TokenArt> = {};
+      for (const [m, i] of result.matched) saved[m] = art[m] = toArt(picks[i]);
+      for (const i of result.unmatched) unmatched.push(toArt(picks[i]));
+      if (Object.keys(saved).length) channel.post({ type: "save-art", art: saved });
+    }
+
+    const placing = [
+      ...members.filter((m) => !present.has(m) && art[m]).map((m) => ({ pc: m as string | null, art: art[m] })),
+      ...unmatched.map((a) => ({ pc: null, art: a })),
+    ];
+    const missing = members.filter((m) => !present.has(m) && !art[m]);
+
+    if (toLink.length) {
+      const pcFor = new Map(toLink.map((t) => [t.id, t.pc]));
+      await OBR.scene.items.updateItems([...pcFor.keys()], (drafts) => {
+        for (const d of drafts) d.metadata[PC_KEY] = { name: pcFor.get(d.id) };
+      });
+    }
+    if (placing.length) {
+      const dpi = await OBR.scene.grid.getDpi();
+      const size = (a: TokenArt) => (a.image.width / a.grid.dpi) * dpi * Math.abs(a.scale.x);
+      const spacing = Math.max(dpi, ...placing.map((p) => size(p.art)));
+      const [w, h] = await Promise.all([OBR.viewport.getWidth(), OBR.viewport.getHeight()]);
+      const center = await OBR.viewport.inverseTransformPoint({ x: w / 2, y: h / 2 });
+      const spots = await Promise.all(rowPositions(center, placing.length, spacing).map((p) => OBR.scene.grid.snapPosition(p)));
+      const tokens = placing.map(({ pc, art: a }, i) => {
+        let b = buildImage(a.image, a.grid)
+          .name(a.name)
+          .scale(a.scale)
+          .rotation(a.rotation)
+          .layer("CHARACTER")
+          .position(spots[i])
+          .metadata(pc ? { [PC_KEY]: { name: pc } } : {});
+        if (a.text) b = b.text(a.text as TextContent);
+        if (a.textItemType) b = b.textItemType(a.textItemType as "LABEL" | "TEXT");
+        if (a.description) b = b.description(a.description);
+        return b.build();
+      });
+      await OBR.scene.items.addItems(tokens);
+    }
+
+    const parts: string[] = [];
+    const placed = placing.filter((p) => p.pc).map((p) => p.pc);
+    if (placed.length) parts.push(`Added ${placed.join(", ")}`);
+    if (toLink.length) parts.push(`linked ${toLink.map((t) => t.pc).join(", ")} already on the map`);
+    if (unmatched.length) parts.push(`placed ${unmatched.map((a) => a.name).join(", ")} unlinked (no PC with that name)`);
+    if (missing.length) parts.push(`no token picked for ${missing.join(", ")}`);
+    partyNotice = parts.length ? `${parts.join("; ")}.` : "Everyone's already on the map.";
+  } catch (err) {
+    partyNotice = `Couldn't insert the party: ${(err as Error).message}`;
+  } finally {
+    inserting = false;
+    render();
+  }
 }
 
 async function selectTokens(entry: Entry | undefined) {
@@ -247,6 +370,15 @@ function gmHtml(): string {
       ${party?.source === "bridge" ? `<button id="edit-party" type="button" title="Edit party">Edit</button>` : ""}
     </div>
     ${formOpen ? partyFormHtml() : ""}
+    ${
+      state.members.length
+        ? `<div class="bar">
+      <button id="insert-party" type="button" title="Put the party's tokens on the map, linked" ${inserting ? "disabled" : ""}>Insert party</button>
+      <button id="repick" type="button" title="Choose the party's token images again">Re-pick tokens</button>
+    </div>`
+        : ""
+    }
+    ${partyNotice ? `<div class="notice">${esc(partyNotice)}</div>` : ""}
     <div class="bar">
       <button id="roll" type="button" title="Roll for monsters without a number">Roll</button>
       ${started ? `<button id="prev" type="button" title="Previous turn">◀</button>` : ""}
@@ -310,6 +442,8 @@ function wireGm() {
   const on = (id: string, fn: () => void) => document.getElementById(id)?.addEventListener("click", fn);
 
   document.getElementById("party")?.addEventListener("change", (e) => void choose((e.target as HTMLSelectElement).value));
+  on("insert-party", () => void insertParty(false));
+  on("repick", () => void insertParty(true));
   on("new-party", () => {
     formOpen = { editing: null };
     partyError = "";

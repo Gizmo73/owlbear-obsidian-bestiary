@@ -25,6 +25,8 @@
     local: [],
     menus: {},
     sceneMeta: {},
+    nextPicks: [],
+    pickerCalls: [],
     log: [],
   };
   const subs = { player: new Set(), items: new Set(), local: new Set(), meta: new Set() };
@@ -69,6 +71,23 @@
       return {};
     },
     OBR_SCENE_METADATA_SUBSCRIBE: (d, src) => { subs.meta.add(src); },
+    OBR_ASSETS_DOWNLOAD_IMAGES: (d) => {
+      state.pickerCalls.push(d);
+      const images = state.nextPicks;
+      state.nextPicks = [];
+      return { images };
+    },
+    OBR_VIEWPORT_GET_WIDTH: () => ({ width: 1000 }),
+    OBR_VIEWPORT_GET_HEIGHT: () => ({ height: 700 }),
+    // The test viewport is unscaled with its origin at (0, 0): screen point = scene point.
+    OBR_VIEWPORT_INVERSE_TRANSFORM_POINT: (d) => ({ point: d.point }),
+    // Snap to grid-cell centres (150 dpi).
+    OBR_SCENE_GRID_SNAP_POSITION: (d) => ({ position: { x: Math.floor(d.position.x / 150) * 150 + 75, y: Math.floor(d.position.y / 150) * 150 + 75 } }),
+    OBR_SCENE_ITEMS_ADD_ITEMS: (d) => {
+      state.items.push(...clone(d.items));
+      queueMicrotask(() => emit(subs.items, "OBR_SCENE_ITEMS_EVENT_CHANGE", { items: state.items }));
+      return {};
+    },
     OBR_ACTION_SET_WIDTH: () => ({}),
     OBR_ACTION_SET_HEIGHT: () => ({}),
     OBR_SCENE_IS_READY: () => ({ ready: true }),

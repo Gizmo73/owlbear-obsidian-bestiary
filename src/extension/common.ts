@@ -2,7 +2,7 @@
 
 import type { Item } from "@owlbear-rodeo/sdk";
 import type { BestiaryEntry } from "../shared/bestiary";
-import { DEFAULT_PORT, type PartiesPayload } from "../shared/protocol";
+import { DEFAULT_PORT, type PartiesPayload, type TokenArt } from "../shared/protocol";
 import { EMPTY_COMBAT, type CombatState, type MonsterToken, type PcToken, type PublicOrder } from "../shared/turns";
 
 export const EXT_ID = "com.gizmo73.obsidian-bestiary";
@@ -191,7 +191,8 @@ export type ChannelMessage =
   | { type: "get-parties" }
   | { type: "parties"; parties: PartiesPayload | null; error?: string }
   | { type: "save-party"; name: string; members: string[] }
-  | { type: "delete-party"; name: string };
+  | { type: "delete-party"; name: string }
+  | { type: "save-art"; art: Record<string, TokenArt | null> };
 
 /** Same-origin channel between this extension's iframes in this browser tab. */
 export function openChannel(onMessage: (msg: ChannelMessage) => void) {

@@ -15,7 +15,8 @@ await mkdir(tmp, { recursive: true });
 await build({
   stdin: {
     contents: `export * from "../src/shared/names.ts"; export * from "../src/shared/hp.ts";
-export * from "../src/shared/search.ts"; export * from "../src/shared/bestiary.ts"; export * from "../src/shared/turns.ts";`,
+export * from "../src/shared/search.ts"; export * from "../src/shared/bestiary.ts"; export * from "../src/shared/turns.ts";
+export * from "../src/shared/party.ts";`,
     resolveDir: join(root, "test"),
     loader: "ts",
   },
@@ -103,6 +104,16 @@ eq("numbering fills gaps", [S.nextNumbers([1, 3], 2), S.nextNumbers([], 3)], [[2
 eq("numeric sort: Goblin 2 before Goblin 10", S.buildEntries([mon("a", "Goblin", 10, 2), mon("b", "Goblin", 2, 2)], [], { ...S.EMPTY_COMBAT, init: { "t:a": 5, "t:b": 5 } }).map((e) => e.name), ["Goblin 2", "Goblin 10"]);
 eq("nothing rolled: no turn", S.step(S.buildEntries([mon("g1", "Goblin", 1, 2)], [], S.EMPTY_COMBAT), S.EMPTY_COMBAT, 1), { turn: null, round: 0 });
 eq("d20 range", [S.rollD20(() => 0), S.rollD20(() => 0.999)], [1, 20]);
+
+// ------------------------------------------------------------ insert party
+const picked = (names) => names.map((name) => ({ name }));
+const asObj = (r) => ({ matched: Object.fromEntries(r.matched), unmatched: r.unmatched });
+eq("exact names match (any case/punctuation)", asObj(S.matchPicks(picked(["dogg", "Berald"]), ["Berald", "Dogg"])), { matched: { Berald: 1, Dogg: 0 }, unmatched: [] });
+eq("full name on the image matches a short PC name", asObj(S.matchPicks(picked(["Berald Barclay", "Wolf"]), ["Berald"])), { matched: { Berald: 0 }, unmatched: [1] });
+eq("token label counts as its name", asObj(S.matchPicks([{ name: "token-01", label: "Yorik" }], ["Yorik"])), { matched: { Yorik: 0 }, unmatched: [] });
+eq("ambiguous prefixes aren't guessed", asObj(S.matchPicks(picked(["Val A", "Val B"]), ["Val"])), { matched: {}, unmatched: [0, 1] });
+eq("an image is used once", asObj(S.matchPicks(picked(["Dogg"]), ["Dogg", "Dogg Jr"])), { matched: { Dogg: 0 }, unmatched: [] });
+eq("row centred on the view", S.rowPositions({ x: 500, y: 300 }, 3, 150), [{ x: 350, y: 300 }, { x: 500, y: 300 }, { x: 650, y: 300 }]);
 
 // ------------------------------------------------------------ search on real vault names
 const vault = join(root, "..", "campaign-master", "Campaign", "Statblocks");
