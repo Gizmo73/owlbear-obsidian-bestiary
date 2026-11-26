@@ -34,6 +34,8 @@ Two parts work together:
   matched to PCs by name ("Berald" or "Berald Barclay" → Berald). The link from PC to image is
   saved in your vault, so after that it's one click. PCs already on the map are skipped (a token
   just named after a PC gets linked instead). *Re-pick tokens* chooses the images again.
+  PC tokens already on the map are remembered too, so dragging the party in from your library
+  once is another way to set it up.
 - Every token has its own row and turn, but *Roll* gives each creature type one shared roll
   (d20 + Dex), so Goblin 1, 2 and 3 act back to back. A goblin added mid-fight joins their roll.
   Type the PCs' rolls; any number can be edited. Ties go to monsters.
@@ -41,8 +43,10 @@ Two parts work together:
 - *Start* / *Next* / *Previous*: the active token gets a gold ring (only you see it), are
   selected so you can move them straight away, and their statblock opens in the Creature pane.
   Rounds are counted. Clicking a row's name selects its token too.
-- The eye button holds a creature back (not in combat yet): it's skipped and players don't see it.
-  Monsters at 0 HP or below are greyed out and skipped.
+- The eye button on a monster hides or reveals its token for players, and it works the other way
+  too: hide a token on the map and the panel greys it out. Hidden monsters haven't joined the
+  fight: they're skipped and left out of the players' list. On a PC, the eye just holds them
+  back. Monsters at 0 HP or below are greyed out and skipped.
 - **Players** see the same panel as a plain list: names and whose turn it is, never HP.
   Held, downed and hidden-on-the-map monsters are left out.
 

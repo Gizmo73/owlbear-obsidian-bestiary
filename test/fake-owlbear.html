@@ -27,6 +27,8 @@
     sceneMeta: {},
     nextPicks: [],
     pickerCalls: [],
+    /** When set, the asset picker rejects with this (Owlbear sent a non-Error object). */
+    pickerError: null,
     log: [],
   };
   const subs = { player: new Set(), items: new Set(), local: new Set(), meta: new Set() };
@@ -73,6 +75,7 @@
     OBR_SCENE_METADATA_SUBSCRIBE: (d, src) => { subs.meta.add(src); },
     OBR_ASSETS_DOWNLOAD_IMAGES: (d) => {
       state.pickerCalls.push(d);
+      if (state.pickerError) throw state.pickerError;
       const images = state.nextPicks;
       state.nextPicks = [];
       return { images };
@@ -123,7 +126,13 @@
       state.log.push(`UNHANDLED ${msg.id}`);
       return;
     }
-    const data = handler(msg.data ?? {}, e.source);
+    let data;
+    try {
+      data = handler(msg.data ?? {}, e.source);
+    } catch (err) {
+      if (msg.nonce) e.source.postMessage({ id: `${msg.id}_ERROR${msg.nonce}`, data: clone(err) }, "*");
+      return;
+    }
     if (msg.nonce) e.source.postMessage({ id: `${msg.id}_RESPONSE${msg.nonce}`, data: clone(data ?? {}) }, "*");
   });
 

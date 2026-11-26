@@ -3877,6 +3877,7 @@
       const id = tokenEntryId(t.id);
       const entry = make(id, "monster", monsterName(t.creature, t.n, siblings.get(group)), t.mod, group);
       entry.tokens.push({ id: t.id, hp: t.hp, maxHp: t.maxHp, visible: t.visible });
+      if (!t.visible) entry.held = true;
       entry.down = t.hp <= 0;
       byId.set(id, entry);
     }
@@ -4116,6 +4117,37 @@
     await save({ party: party?.name ?? null, members: party?.members ?? [] });
   }
   var plainText = (text) => text?.plainText ?? "";
+  function describeError(err) {
+    if (err instanceof Error) return err.message;
+    if (typeof err === "string") return err;
+    const message = err?.message ?? err?.error;
+    if (typeof message === "string") return message;
+    try {
+      return JSON.stringify(err) ?? String(err);
+    } catch {
+      return String(err);
+    }
+  }
+  function artFromItem(item) {
+    return toArt({ ...item, type: "CHARACTER" });
+  }
+  async function pickImages(search) {
+    const attempts = [
+      () => lib_default.assets.downloadImages(true, search || void 0, "CHARACTER"),
+      () => lib_default.assets.downloadImages(true),
+      () => lib_default.assets.downloadImages()
+    ];
+    let error = "";
+    for (const attempt of attempts) {
+      try {
+        return { picks: await attempt() ?? [] };
+      } catch (err) {
+        error = describeError(err);
+        console.warn("[obsidian-bestiary] asset picker failed:", err);
+      }
+    }
+    return { picks: [], error };
+  }
   function toArt(d) {
     return {
       name: d.name,
@@ -4137,11 +4169,19 @@
       const byKey = new Map(members.map((m) => [matchKey(m), m]));
       const present = /* @__PURE__ */ new Set();
       const toLink = [];
+      const art = { ...parties?.art ?? {} };
+      const saved = {};
+      const learn = (m, item) => {
+        if (!art[m] && isImage(item) && item.image?.url) saved[m] = art[m] = artFromItem(item);
+      };
       for (const item of await lib_default.scene.items.getItems()) {
         const pc = readPc(item.metadata);
         if (pc) {
           const m = byKey.get(matchKey(pc));
-          if (m) present.add(m);
+          if (m) {
+            present.add(m);
+            learn(m, item);
+          }
           continue;
         }
         if (item.layer !== "CHARACTER" || readCreature(item.metadata)) continue;
@@ -4151,24 +4191,25 @@
           if (m && !present.has(m)) {
             present.add(m);
             toLink.push({ id: item.id, pc: m });
+            learn(m, item);
             break;
           }
         }
       }
-      const art = { ...parties?.art ?? {} };
       const need = repick ? members : members.filter((m) => !present.has(m) && !art[m]);
       const unmatched = [];
+      let pickerError = "";
       if (need.length) {
-        const picks = await lib_default.assets.downloadImages(true, need.length === 1 ? need[0] : "", "CHARACTER");
+        const { picks, error } = await pickImages(need.length === 1 ? need[0] : "");
+        pickerError = error ?? "";
         const result = matchPicks(
           picks.map((p) => ({ name: p.name, label: plainText(p.text) })),
           need
         );
-        const saved = {};
         for (const [m, i] of result.matched) saved[m] = art[m] = toArt(picks[i]);
         for (const i of result.unmatched) unmatched.push(toArt(picks[i]));
-        if (Object.keys(saved).length) channel.post({ type: "save-art", art: saved });
       }
+      if (Object.keys(saved).length) channel.post({ type: "save-art", art: saved });
       const placing = [
         ...members.filter((m) => !present.has(m) && art[m]).map((m) => ({ pc: m, art: art[m] })),
         ...unmatched.map((a) => ({ pc: null, art: a }))
@@ -4201,10 +4242,15 @@
       if (placed.length) parts.push(`Added ${placed.join(", ")}`);
       if (toLink.length) parts.push(`linked ${toLink.map((t) => t.pc).join(", ")} already on the map`);
       if (unmatched.length) parts.push(`placed ${unmatched.map((a) => a.name).join(", ")} unlinked (no PC with that name)`);
-      if (missing.length) parts.push(`no token picked for ${missing.join(", ")}`);
+      if (missing.length && !pickerError) parts.push(`no token picked for ${missing.join(", ")}`);
+      if (pickerError) {
+        parts.push(
+          `Owlbear's token picker didn't open (${pickerError}). Drag ${missing.length ? missing.join(", ") : "the party"} onto the map from your library once and press Insert party again: it will remember them`
+        );
+      }
       partyNotice = parts.length ? `${parts.join("; ")}.` : "Everyone's already on the map.";
     } catch (err) {
-      partyNotice = `Couldn't insert the party: ${err.message}`;
+      partyNotice = `Couldn't insert the party: ${describeError(err)}`;
     } finally {
       inserting = false;
       render();
@@ -4237,6 +4283,35 @@
     }
     const turn = state.turn && legacy(state.turn) ? entries().find((e) => e.group === state.turn)?.id ?? null : state.turn;
     await save({ init, held, turn });
+  }
+  async function migrateHeldMonsters() {
+    if (role !== "GM") return;
+    const monsterIds = (id) => id.startsWith("t:") || id.startsWith("m:");
+    if (!state.held.some(monsterIds)) return;
+    const tokens = entries().filter((e) => e.kind === "monster" && (state.held.includes(e.id) || state.held.includes(e.group))).flatMap((e) => e.tokens.map((t) => t.id));
+    if (tokens.length) {
+      await lib_default.scene.items.updateItems(tokens, (drafts) => {
+        for (const d of drafts) d.visible = false;
+      });
+    }
+    await save({ held: state.held.filter((id) => !monsterIds(id)) });
+  }
+  async function toggleHeld(entry) {
+    if (entry.kind === "monster") {
+      const show = entry.held;
+      await lib_default.scene.items.updateItems(
+        entry.tokens.map((t) => t.id),
+        (drafts) => {
+          for (const d of drafts) d.visible = show;
+        }
+      );
+      if (state.held.includes(entry.id) || state.held.includes(entry.group)) {
+        await save({ held: state.held.filter((id) => id !== entry.id && id !== entry.group) });
+      }
+      return;
+    }
+    const held = entry.held ? state.held.filter((id) => id !== entry.id) : [...state.held, entry.id];
+    await save({ held });
   }
   async function applyHpTo(entry, value) {
     const op = parseHpInput(value);
@@ -4296,7 +4371,7 @@
       <button class="name" type="button" title="Select on the map">${esc(displayName(e))}</button>
       ${hps}
       ${e.kind === "monster" ? `<button class="icon reroll" type="button" title="Roll d20 ${e.mod >= 0 ? "+" : ""}${e.mod}">${ICON.dice}</button>` : `<span class="icon-spacer"></span>`}
-      <button class="icon hold" type="button" title="${e.held ? "Not in combat yet: click to join" : "In combat: click to hold back"}">${e.held ? ICON.eyeOff : ICON.eye}</button>
+      <button class="icon hold" type="button" title="${e.kind === "monster" ? e.held ? "Hidden from players, not in the fight yet: click to reveal" : "Visible to players: click to hide (and skip)" : e.held ? "Not in combat yet: click to join" : "In combat: click to hold back"}">${e.held ? ICON.eyeOff : ICON.eye}</button>
     </li>`;
   }
   function gmHtml() {
@@ -4428,10 +4503,7 @@
       });
       li.querySelector(".name")?.addEventListener("click", () => void selectTokens(entry));
       li.querySelector(".reroll")?.addEventListener("click", () => void save({ init: { ...state.init, [entry.id]: rollD20() + entry.mod } }));
-      li.querySelector(".hold")?.addEventListener("click", () => {
-        const held = entry.held ? state.held.filter((id) => id !== entry.id && id !== entry.group) : [...state.held, entry.id];
-        void save({ held });
-      });
+      li.querySelector(".hold")?.addEventListener("click", () => void toggleHeld(entry));
       li.querySelector(".chip")?.addEventListener("click", () => {
         editingHp = entry.id;
         hpError = "";
@@ -4507,6 +4579,7 @@
     });
     if (await lib_default.scene.isReady()) await load();
     await migrateGroupKeys();
+    await migrateHeldMonsters();
     await syncPartyMembers();
   });
 })();

@@ -266,7 +266,8 @@ check("sorted high to low, ties go to monsters", JSON.stringify(r.map((x) => x.i
 
 await P().locator("li[data-id='t:kuo'] .hold").click();
 await page.waitForTimeout(200);
-check("hold marks Kuo-Toa as not in combat yet", (await sceneMeta("combat")).held.includes("t:kuo") && (await rows()).find((x) => x.id === "t:kuo").cls.includes("held"));
+const kuoVisible = () => page.evaluate(() => host.state.items.find((i) => i.id === "kuo").visible);
+check("panel eye on a monster hides its token from players (and holds it)", (await kuoVisible()) === false && !(await sceneMeta("combat")).held.includes("t:kuo") && (await rows()).find((x) => x.id === "t:kuo").cls.includes("held"));
 
 await P().locator("#next").click(); // Start
 await page.waitForTimeout(500);
@@ -332,15 +333,23 @@ check("Next skips downed monsters", c.turn === "p:dogg" && c.round === 2, JSON.s
 // what players get
 let order = await sceneMeta("order");
 check("player order: names only, no held/downed, active marked", JSON.stringify(order) === JSON.stringify({ round: 2, entries: [{ name: "Berald", active: false }, { name: "Dogg", active: true }] }), JSON.stringify(order));
-await P().locator("li[data-id='t:kuo'] .hold").click(); // Kuo-Toa joins...
-await page.evaluate(() => host.editItems((items) => { items.find((i) => i.id === "kuo").visible = false; })); // ...but is invisible on the map
+await P().locator("li[data-id='t:kuo'] .hold").click(); // reveal Kuo-Toa from the panel
 await page.waitForTimeout(400);
 order = await sceneMeta("order");
-check("monsters hidden on the map stay out of the players' list", !order.entries.some((e) => /Kuo/.test(e.name)));
+check("panel eye again reveals the token, and players see it in the list", (await kuoVisible()) === true && order.entries.some((e) => e.name === "Kuo-Toa") && !(await rows()).find((x) => x.id === "t:kuo").cls.includes("held"));
+await page.evaluate(() => host.editItems((items) => { items.find((i) => i.id === "kuo").visible = false; })); // hidden with Owlbear's own hide
+await page.waitForTimeout(400);
+order = await sceneMeta("order");
+check("hiding the token on the map greys it in the panel and drops it from the players' list", !order.entries.some((e) => /Kuo/.test(e.name)) && (await rows()).find((x) => x.id === "t:kuo").cls.includes("held"));
+c = await sceneMeta("combat");
+const fromDogg = await page.evaluate(() => host.state.sceneMeta["com.gizmo73.obsidian-bestiary/combat"].turn);
+await P().locator("#next").click();
+await page.waitForTimeout(300);
+check("...and Next skips it", (await sceneMeta("combat")).turn !== "t:kuo", `${fromDogg} -> ${(await sceneMeta("combat")).turn}`);
 await page.evaluate(() => host.editItems((items) => { items.find((i) => i.id === "kuo").visible = true; }));
 await page.waitForTimeout(400);
 order = await sceneMeta("order");
-check("...and appear once visible", order.entries.some((e) => e.name === "Kuo-Toa"));
+check("unhiding on the map brings it back everywhere", order.entries.some((e) => e.name === "Kuo-Toa") && !(await rows()).find((x) => x.id === "t:kuo").cls.includes("held"));
 
 // a copy-pasted goblin carries Goblin 1's number; it gets the next free one
 await page.evaluate(() => host.editItems((items) => {
@@ -403,7 +412,31 @@ check("nothing duplicated when everyone is already on the map", (await byImage("
 await P().locator("#repick").click();
 await page.waitForTimeout(400);
 pickerCalls = await page.evaluate(() => host.state.pickerCalls);
-check("Re-pick opens the picker for the whole party", pickerCalls.length === 2 && pickerCalls[1].defaultSearch === "");
+check("Re-pick opens the picker for the whole party", pickerCalls.length === 2 && !pickerCalls[1].defaultSearch);
+
+// when Owlbear refuses the picker: say why, and learn tokens from the map instead
+await P().locator("#party").selectOption("LiS"); // Berald (on the map) + Dogg (no token yet)
+await page.waitForTimeout(300);
+await page.evaluate(() => { host.state.pickerError = { code: "ASSETS_UNAVAILABLE" }; });
+await P().locator("#insert-party").click();
+await page.waitForTimeout(600);
+let notice = await P().locator(".notice").innerText();
+pickerCalls = await page.evaluate(() => host.state.pickerCalls);
+check("picker failure shows Owlbear's actual error, after plainer retries", /ASSETS_UNAVAILABLE/.test(notice) && !/undefined/.test(notice) && pickerCalls.length === 5, notice);
+check("...and says how to get going without it", /Drag Dogg onto the map/.test(notice));
+await page.evaluate((a) => {
+  host.state.pickerError = null;
+  host.addToken("dogg", "Dogg", 900, 600);
+  Object.assign(host.state.items.find((i) => i.id === "dogg"), { image: a.image, grid: a.grid });
+}, asset("Dogg"));
+await P().locator("#insert-party").click();
+await page.waitForTimeout(500);
+check("dragged-in token gets linked and its image remembered in the vault", (await pcOf("dogg")) === "Dogg" && tokenArt.Dogg?.image?.url.endsWith("/Dogg.png"));
+await page.evaluate(() => host.editItems((items) => items.splice(items.findIndex((i) => i.id === "dogg"), 1)));
+await page.waitForTimeout(300);
+await P().locator("#insert-party").click();
+await page.waitForTimeout(500);
+check("next Insert party recreates it from the remembered image, no picker", (await byImage("Dogg")).length === 1 && (await byImage("Dogg"))[0].metadata["com.gizmo73.obsidian-bestiary/pc"]?.name === "Dogg" && (await page.evaluate(() => host.state.pickerCalls.length)) === 5);
 
 await P().locator("#end").click();
 await P().locator("#end").click();
