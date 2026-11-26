@@ -3540,6 +3540,34 @@
   var lib_default = OBR;
 
   // src/shared/hp.ts
+  function parseHpInput(input) {
+    const s = input.trim().toLowerCase().replace(/\s+/g, "");
+    if (!s) return null;
+    let m = /^(?:max|m)=?(\d+)$/.exec(s);
+    if (m) return { kind: "max", amount: Number(m[1]) };
+    m = /^=(-?\d+)$/.exec(s);
+    if (m) return { kind: "set", amount: Number(m[1]) };
+    m = /^\+(\d+)$/.exec(s);
+    if (m) return { kind: "heal", amount: Number(m[1]) };
+    m = /^-?(\d+)$/.exec(s);
+    if (m) return { kind: "damage", amount: Number(m[1]) };
+    return null;
+  }
+  function applyHp(state2, op) {
+    switch (op.kind) {
+      case "damage":
+        return { ...state2, hp: state2.hp - op.amount };
+      case "heal":
+        return { ...state2, hp: Math.min(state2.maxHp, Math.max(state2.hp, 0) + op.amount) };
+      case "set":
+        return { ...state2, hp: op.amount };
+      case "max": {
+        const taken = state2.maxHp - state2.hp;
+        const maxHp = Math.max(1, op.amount);
+        return { hp: maxHp - taken, maxHp };
+      }
+    }
+  }
   function hpBand(state2) {
     if (state2.hp <= 0) return "down";
     if (state2.hp <= state2.maxHp / 2) return "bloodied";
@@ -3554,27 +3582,40 @@
   // src/shared/turns.ts
   var EMPTY_COMBAT = { round: 0, turn: null, party: null, members: [], init: {}, held: [] };
   var monsterId = (creature) => `m:${matchKey(creature)}`;
+  var tokenEntryId = (tokenId) => `t:${tokenId}`;
   var pcId = (name) => `p:${matchKey(name)}`;
+  function monsterName(creature, n, siblings) {
+    return siblings > 1 && n ? `${creature} ${n}` : creature;
+  }
   function buildEntries(monsters, pcTokens, state2) {
     const byId = /* @__PURE__ */ new Map();
     const held = new Set(state2.held);
-    const make = (id, kind, name, mod) => ({
+    const initOf = (...ids) => {
+      for (const id of ids) if (typeof state2.init[id] === "number") return state2.init[id];
+      return null;
+    };
+    const make = (id, kind, name, mod, group = id) => ({
       id,
       kind,
       name,
+      group,
       mod,
-      init: typeof state2.init[id] === "number" ? state2.init[id] : null,
-      held: held.has(id),
+      // Monsters fall back to their group's roll (how 0.2.0 stored it).
+      init: initOf(id, group),
+      held: held.has(id) || held.has(group),
       down: false,
       tokens: []
     });
+    const siblings = /* @__PURE__ */ new Map();
+    for (const t of monsters) siblings.set(monsterId(t.creature), (siblings.get(monsterId(t.creature)) ?? 0) + 1);
     for (const t of monsters) {
-      const id = monsterId(t.creature);
-      const entry = byId.get(id) ?? make(id, "monster", t.creature, t.mod);
+      const group = monsterId(t.creature);
+      const id = tokenEntryId(t.id);
+      const entry = make(id, "monster", monsterName(t.creature, t.n, siblings.get(group)), t.mod, group);
       entry.tokens.push({ id: t.id, hp: t.hp, maxHp: t.maxHp, visible: t.visible });
+      entry.down = t.hp <= 0;
       byId.set(id, entry);
     }
-    for (const e of byId.values()) e.down = e.tokens.every((t) => (t.hp ?? 1) <= 0);
     for (const name of state2.members) {
       const id = pcId(name);
       if (!byId.has(id)) byId.set(id, make(id, "pc", name, 0));
@@ -3593,7 +3634,7 @@
     } else if (a.init !== b.init) return b.init - a.init;
     if (a.kind !== b.kind) return a.kind === "monster" ? -1 : 1;
     if (a.mod !== b.mod) return b.mod - a.mod;
-    return a.name.localeCompare(b.name);
+    return a.name.localeCompare(b.name, void 0, { numeric: true });
   }
   function acting(entries2) {
     return entries2.filter((e) => e.init !== null && !e.held && !e.down);
@@ -3624,7 +3665,18 @@
     return { turn: order2[next].id, round };
   }
   function displayName(e) {
-    return e.kind === "monster" && e.tokens.length > 1 ? `${e.name} \xD7${e.tokens.length}` : e.name;
+    return e.name;
+  }
+  function rollMissing(entries2, init, d20) {
+    const next = { ...init };
+    const groupRoll = /* @__PURE__ */ new Map();
+    for (const e of entries2) if (e.kind === "monster" && e.init !== null && !groupRoll.has(e.group)) groupRoll.set(e.group, e.init);
+    for (const e of entries2) {
+      if (e.kind !== "monster" || e.init !== null) continue;
+      if (!groupRoll.has(e.group)) groupRoll.set(e.group, d20() + e.mod);
+      next[e.id] = groupRoll.get(e.group);
+    }
+    return next;
   }
   function rollD20(random = Math.random) {
     return 1 + Math.floor(random() * 20);
@@ -3663,7 +3715,7 @@
     for (const item of items2) {
       const c = readCreature(item.metadata);
       if (c) {
-        monsters.push({ id: item.id, creature: c.name, mod: c.init, hp: c.hp, maxHp: c.maxHp, visible: item.visible });
+        monsters.push({ id: item.id, creature: c.name, n: c.n, mod: c.init, hp: c.hp, maxHp: c.maxHp, visible: item.visible });
         continue;
       }
       const pc = readPc(item.metadata);
@@ -3748,6 +3800,8 @@
   var formOpen = null;
   var confirmEnd = false;
   var lastPartyApplied = false;
+  var editingHp = null;
+  var hpError = "";
   var esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   var ICON = {
     eye: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>`,
@@ -3804,10 +3858,39 @@
     await save(next);
     await selectTokens(list.find((e) => e.id === next.turn));
   }
-  async function rollMissing() {
-    const init = { ...state.init };
-    for (const e of entries()) if (e.kind === "monster" && e.init === null) init[e.id] = rollD20() + e.mod;
-    await save({ init });
+  async function rollMissing2() {
+    await save({ init: rollMissing(entries(), state.init, rollD20) });
+  }
+  async function migrateGroupKeys() {
+    if (role !== "GM") return;
+    const legacy = (id) => id.startsWith("m:");
+    if (!Object.keys(state.init).some(legacy) && !state.held.some(legacy)) return;
+    const init = {};
+    for (const [id, value] of Object.entries(state.init)) if (!legacy(id)) init[id] = value;
+    const held = state.held.filter((id) => !legacy(id));
+    for (const e of entries()) {
+      if (e.kind !== "monster") continue;
+      if (e.init !== null) init[e.id] = e.init;
+      if (e.held && !held.includes(e.id)) held.push(e.id);
+    }
+    const turn = state.turn && legacy(state.turn) ? entries().find((e) => e.group === state.turn)?.id ?? null : state.turn;
+    await save({ init, held, turn });
+  }
+  async function applyHpTo(entry, value) {
+    const op = parseHpInput(value);
+    if (!op) {
+      hpError = "Try 7, +5, =20 or max 30";
+      return false;
+    }
+    const ids = entry.tokens.map((t) => t.id);
+    await lib_default.scene.items.updateItems(ids, (drafts) => {
+      for (const d of drafts) {
+        const c = readCreature(d.metadata);
+        if (c) d.metadata[TOKEN_KEY] = { ...c, ...applyHp(c, op) };
+      }
+    });
+    hpError = "";
+    return true;
   }
   var renderQueued = false;
   function render() {
@@ -3843,7 +3926,8 @@
   }
   function rowHtml(e) {
     const cls = [e.kind, e.id === state.turn && state.round > 0 ? "active" : "", e.held ? "held" : "", e.down ? "down" : ""].filter(Boolean).join(" ");
-    const hps = e.kind === "monster" ? `<span class="hps">${e.tokens.slice(0, 6).map((t) => `<span class="chip ${hpBand({ hp: t.hp ?? 0, maxHp: t.maxHp ?? 1 })}" title="${t.hp}/${t.maxHp}">${t.hp}</span>`).join("")}${e.tokens.length > 6 ? "\u2026" : ""}</span>` : `<span class="tag">PC${e.tokens.length ? "" : " \xB7 no token"}</span>`;
+    const t = e.tokens[0];
+    const hps = e.kind !== "monster" ? `<span class="tag">PC${e.tokens.length ? "" : " \xB7 no token"}</span>` : editingHp === e.id ? `<input class="hp-input" type="text" inputmode="numeric" placeholder="7 \xB7 +5 \xB7 =20" aria-label="Damage or heal ${esc(e.name)}">` : `<button class="chip ${hpBand({ hp: t.hp ?? 0, maxHp: t.maxHp ?? 1 })}" type="button" title="Damage or heal">${t.hp}/${t.maxHp}</button>`;
     return `
     <li class="${cls}" data-id="${esc(e.id)}">
       <input class="init" type="number" inputmode="numeric" value="${e.init ?? ""}" placeholder="\u2013" aria-label="Initiative for ${esc(e.name)}">
@@ -3872,6 +3956,7 @@
       <button id="next" class="primary" type="button">${started ? "Next \u25B6" : "Start"}</button>
       ${started || Object.keys(state.init).length ? `<button id="end" type="button">${confirmEnd ? "End combat?" : "End"}</button>` : ""}
     </div>
+    ${hpError ? `<div class="error">${esc(hpError)}</div>` : ""}
     ${list.length ? `<ol class="order">${list.map(rowHtml).join("")}</ol>` : `<p class="help">Link tokens (right-click \u2192 <b>Statblock &amp; HP</b>) or pick a party to build the order.</p>`}
     <details class="conn-details">
       <summary>Connection</summary>
@@ -3939,7 +4024,7 @@
       lastPartyApplied = false;
       void save({ party: name, members: [.../* @__PURE__ */ new Set([...checked, ...extra])] });
     });
-    on("roll", () => void rollMissing());
+    on("roll", () => void rollMissing2());
     on("next", () => void move(1));
     on("prev", () => void move(-1));
     on("end", () => {
@@ -3975,9 +4060,39 @@
       li.querySelector(".name")?.addEventListener("click", () => void selectTokens(entry));
       li.querySelector(".reroll")?.addEventListener("click", () => void save({ init: { ...state.init, [entry.id]: rollD20() + entry.mod } }));
       li.querySelector(".hold")?.addEventListener("click", () => {
-        const held = entry.held ? state.held.filter((id) => id !== entry.id) : [...state.held, entry.id];
+        const held = entry.held ? state.held.filter((id) => id !== entry.id && id !== entry.group) : [...state.held, entry.id];
         void save({ held });
       });
+      li.querySelector(".chip")?.addEventListener("click", () => {
+        editingHp = entry.id;
+        hpError = "";
+        render();
+        root.querySelector(`li[data-id="${CSS.escape(entry.id)}"] .hp-input`)?.focus();
+      });
+      const hpInput = li.querySelector(".hp-input");
+      if (hpInput) {
+        const close = () => {
+          editingHp = null;
+          hpInput.blur();
+          render();
+        };
+        hpInput.addEventListener("keydown", async (e) => {
+          if (e.key === "Escape") close();
+          if (e.key !== "Enter") return;
+          if (await applyHpTo(entry, hpInput.value)) close();
+          else {
+            hpInput.select();
+            root.querySelector(".error")?.remove();
+            root.querySelector("ol.order")?.insertAdjacentHTML("beforebegin", `<div class="error">${esc(hpError)}</div>`);
+          }
+        });
+        hpInput.addEventListener("blur", () => {
+          if (editingHp === entry.id) {
+            editingHp = null;
+            setTimeout(render, 0);
+          }
+        });
+      }
     });
     on("reconnect", () => channel.post({ type: "reconnect" }));
     on("refresh", () => channel.post({ type: "refresh-bestiary" }));
@@ -4022,6 +4137,7 @@
       }
     });
     if (await lib_default.scene.isReady()) await load();
+    await migrateGroupKeys();
     await syncPartyMembers();
   });
 })();

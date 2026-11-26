@@ -146,7 +146,7 @@ await m().locator("#results").screenshot({ path: join(tmp, "menu-assign.png") })
 await m().locator("#q").press("Enter");
 await m().waitForSelector("#hp");
 const meta = await page.evaluate(() => host.state.items.filter((i) => i.id.startsWith("g")).map((i) => i.metadata["com.gizmo73.obsidian-bestiary/creature"]));
-check("both goblins linked with their own HP", meta.length === 2 && meta.every((c) => c?.name === "Goblin" && c.hp === 7 && c.maxHp === 7 && c.ac === 15 && c.init === 2), JSON.stringify(meta[0]));
+check("both goblins linked with their own HP, numbered 1 and 2", meta.length === 2 && meta.every((c) => c?.name === "Goblin" && c.hp === 7 && c.maxHp === 7 && c.ac === 15 && c.init === 2) && meta.map((c) => c.n).join() === "1,2", JSON.stringify(meta[0]));
 check("assigning opens the creature in Obsidian", shown.at(-1) === "Goblin");
 
 // 5. HP maths from the menu, applied to the whole selection
@@ -165,7 +165,7 @@ check("'-9' can take HP below 0", JSON.stringify(await hpOf()) === "[-2,-2]");
 await page.waitForTimeout(300);
 const labels = await page.evaluate(() => host.state.local.map((l) => ({ for: l.attachedTo, type: l.type, text: l.text.plainText, fill: l.text.style.fillColor, size: l.text.style.fontSize, top: l.position.y, bottom: l.position.y + l.text.height, noScale: (l.disableAttachmentBehavior ?? []).includes("SCALE") })));
 // Tokens are 150 wide at y=300, so their top edge is y=225.
-check("GM-only HP text above each goblin, 24pt map text", labels.length === 2 && labels.every((l) => l.type === "TEXT" && l.text === "-2/7" && l.fill === "#ff6b6b" && l.size === 24 && l.bottom === 225 && l.noScale), JSON.stringify(labels[0]));
+check("GM-only HP text above each goblin, 24pt map text", labels.length === 2 && labels.every((l) => l.type === "TEXT" && /^#[12] -2\/7$/.test(l.text) && l.fill === "#ff6b6b" && l.size === 24 && l.bottom === 225 && l.noScale), JSON.stringify(labels[0]));
 await page.evaluate(() => {
   host.state.items.find((i) => i.id === "g1").scale = { x: 2, y: 2 };
   host.select(["g1", "g2"]);
@@ -228,13 +228,13 @@ await P().locator("#party").selectOption("LiS");
 await page.waitForTimeout(300);
 check("choosing a party puts its PCs in the order", JSON.stringify((await sceneMeta("combat")).members) === '["Berald","Dogg"]');
 let r = await rows();
-check("order lists monster groups and PCs", JSON.stringify(r.map((x) => x.name).sort()) === JSON.stringify(["Berald", "Dogg", "Goblin ×2", "Kuo-Toa"]), r.map((x) => x.name).join(", "));
+check("order lists each token and the PCs", JSON.stringify(r.map((x) => x.name).sort()) === JSON.stringify(["Berald", "Dogg", "Goblin 1", "Goblin 2", "Kuo-Toa"]), r.map((x) => x.name).join(", "));
 
 await P().evaluate(() => { Math.random = () => 0.5; }); // d20 -> 11
 await P().locator("#roll").click();
 await page.waitForTimeout(300);
 let init = (await sceneMeta("combat")).init;
-check("Roll gives each monster group one shared roll (d20 + Dex)", init["m:goblin"] === 13 && init["m:kuotoa"] === 11 && init["p:berald"] === undefined, JSON.stringify(init));
+check("Roll: goblins share one roll (d20 + Dex), Kuo-Toa its own", init["t:g1"] === 13 && init["t:g2"] === 13 && init["t:kuo"] === 11 && init["p:berald"] === undefined, JSON.stringify(init));
 const setInit = async (id, value) => {
   const input = P().locator(`li[data-id='${id}'] input.init`);
   await input.fill(String(value));
@@ -244,11 +244,11 @@ const setInit = async (id, value) => {
 await setInit("p:berald", 20);
 await setInit("p:dogg", 13);
 r = await rows();
-check("sorted high to low, ties go to monsters", JSON.stringify(r.map((x) => x.id)) === '["p:berald","m:goblin","p:dogg","m:kuotoa"]', r.map((x) => x.id).join(","));
+check("sorted high to low, ties go to monsters", JSON.stringify(r.map((x) => x.id)) === '["p:berald","t:g1","t:g2","p:dogg","t:kuo"]', r.map((x) => x.id).join(","));
 
-await P().locator("li[data-id='m:kuotoa'] .hold").click();
+await P().locator("li[data-id='t:kuo'] .hold").click();
 await page.waitForTimeout(200);
-check("hold marks Kuo-Toa as not in combat yet", (await sceneMeta("combat")).held.includes("m:kuotoa") && (await rows()).find((x) => x.id === "m:kuotoa").cls.includes("held"));
+check("hold marks Kuo-Toa as not in combat yet", (await sceneMeta("combat")).held.includes("t:kuo") && (await rows()).find((x) => x.id === "t:kuo").cls.includes("held"));
 
 await P().locator("#next").click(); // Start
 await page.waitForTimeout(500);
@@ -259,7 +259,11 @@ await P().locator("body").screenshot({ path: join(tmp, "panel-gm.png") });
 await P().locator("#next").click();
 await page.waitForTimeout(500);
 c = await sceneMeta("combat");
-check("Next: goblins act together, both selected + ringed, statblock opened", c.turn === "m:goblin" && JSON.stringify((await page.evaluate(() => host.state.selection)).sort()) === '["g1","g2"]' && JSON.stringify(await ringsOn()) === '["g1","g2"]' && shown.at(-1) === "Goblin");
+check("Next: Goblin 1 alone, selected + ringed, statblock opened", c.turn === "t:g1" && JSON.stringify(await page.evaluate(() => host.state.selection)) === '["g1"]' && JSON.stringify(await ringsOn()) === '["g1"]' && shown.at(-1) === "Goblin");
+await P().locator("#next").click();
+await page.waitForTimeout(400);
+c = await sceneMeta("combat");
+check("Next: then Goblin 2", c.turn === "t:g2" && JSON.stringify(await page.evaluate(() => host.state.selection)) === '["g2"]' && JSON.stringify(await ringsOn()) === '["g2"]');
 
 await P().locator("#next").click();
 await page.waitForTimeout(300);
@@ -274,14 +278,32 @@ await page.waitForTimeout(300);
 c = await sceneMeta("combat");
 check("Previous goes back a round", c.turn === "p:dogg" && c.round === 1);
 
-await P().locator("li[data-id='m:goblin'] .name").click();
+await P().locator("li[data-id='t:g2'] .name").click();
 await page.waitForTimeout(300);
-check("clicking a row selects its tokens (and opens the statblock)", JSON.stringify((await page.evaluate(() => host.state.selection)).sort()) === '["g1","g2"]' && shown.at(-1) === "Goblin");
+check("clicking a row selects its token (and opens the statblock)", JSON.stringify(await page.evaluate(() => host.state.selection)) === '["g2"]' && shown.at(-1) === "Goblin");
 
-// goblins drop to 0 HP: skipped and greyed
-await page.evaluate(() => host.editItems((items) => items.filter((i) => i.id.startsWith("g")).forEach((i) => { i.metadata["com.gizmo73.obsidian-bestiary/creature"].hp = 0; })));
-await page.waitForTimeout(400);
-check("downed goblins greyed in the GM list", (await rows()).find((x) => x.id === "m:goblin").cls.includes("down"));
+// damage and healing from the panel
+const tokenHp = (id) => page.evaluate((i) => host.state.items.find((x) => x.id === i).metadata["com.gizmo73.obsidian-bestiary/creature"].hp, id);
+const panelHp = async (id, text) => {
+  await P().locator(`li[data-id='${id}'] .chip`).click();
+  await P().locator(`li[data-id='${id}'] .hp-input`).fill(text);
+  await P().locator(`li[data-id='${id}'] .hp-input`).press("Enter");
+  await page.waitForTimeout(300);
+};
+await panelHp("t:g1", "4");
+check("panel: '4' damages just Goblin 1", (await tokenHp("g1")) === 3 && (await tokenHp("g2")) === 7);
+await panelHp("t:g1", "+2");
+check("panel: '+2' heals", (await tokenHp("g1")) === 5 && (await P().locator("li[data-id='t:g1'] .chip").textContent()) === "5/7");
+await P().locator("li[data-id='t:g1'] .chip").click();
+await P().locator("li[data-id='t:g1'] .hp-input").fill("lots");
+await P().locator("li[data-id='t:g1'] .hp-input").press("Enter");
+await page.waitForTimeout(200);
+check("panel: bad input explains the syntax", /Try 7, \+5, =20/.test(await P().locator(".error").first().innerText()));
+await P().locator("li[data-id='t:g1'] .hp-input").press("Escape");
+await panelHp("t:g1", "=0");
+await panelHp("t:g2", "9");
+check("downed goblins greyed in the GM list", (await rows()).filter((x) => x.id.startsWith("t:g")).every((x) => x.cls.includes("down")));
+await P().locator("body").screenshot({ path: join(tmp, "panel-gm-hp.png") });
 await P().locator("#next").click(); // Dogg -> wraps to Berald (round 2)
 await page.waitForTimeout(300);
 await P().locator("#next").click(); // Berald -> skips goblins -> Dogg
@@ -292,7 +314,7 @@ check("Next skips downed monsters", c.turn === "p:dogg" && c.round === 2, JSON.s
 // what players get
 let order = await sceneMeta("order");
 check("player order: names only, no held/downed, active marked", JSON.stringify(order) === JSON.stringify({ round: 2, entries: [{ name: "Berald", active: false }, { name: "Dogg", active: true }] }), JSON.stringify(order));
-await P().locator("li[data-id='m:kuotoa'] .hold").click(); // Kuo-Toa joins...
+await P().locator("li[data-id='t:kuo'] .hold").click(); // Kuo-Toa joins...
 await page.evaluate(() => host.editItems((items) => { items.find((i) => i.id === "kuo").visible = false; })); // ...but is invisible on the map
 await page.waitForTimeout(400);
 order = await sceneMeta("order");
@@ -301,6 +323,14 @@ await page.evaluate(() => host.editItems((items) => { items.find((i) => i.id ===
 await page.waitForTimeout(400);
 order = await sceneMeta("order");
 check("...and appear once visible", order.entries.some((e) => e.name === "Kuo-Toa"));
+
+// a copy-pasted goblin carries Goblin 1's number; it gets the next free one
+await page.evaluate(() => host.editItems((items) => {
+  const g1 = items.find((i) => i.id === "g1");
+  items.push({ ...JSON.parse(JSON.stringify(g1)), id: "g3", zIndex: 5, position: { x: 900, y: 300 } });
+}));
+await page.waitForTimeout(500);
+check("copy-pasted token renumbered as Goblin 3", (await page.evaluate(() => host.state.items.find((i) => i.id === "g3").metadata["com.gizmo73.obsidian-bestiary/creature"].n)) === 3 && (await rows()).some((x) => x.name === "Goblin 3"));
 
 // make a party in Owlbear (saved by the plugin)
 await P().locator("#new-party").click();

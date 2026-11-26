@@ -29,6 +29,8 @@ export interface TokenCreature {
   maxHp: number;
   ac: number | null;
   init: number;
+  /** Per-creature number in the scene ("Goblin 2"). */
+  n?: number;
 }
 
 export function readCreature(metadata: Record<string, unknown>): TokenCreature | null {
@@ -57,13 +59,24 @@ export function combatTokens(items: Item[]): { monsters: MonsterToken[]; pcs: Pc
   for (const item of items) {
     const c = readCreature(item.metadata);
     if (c) {
-      monsters.push({ id: item.id, creature: c.name, mod: c.init, hp: c.hp, maxHp: c.maxHp, visible: item.visible });
+      monsters.push({ id: item.id, creature: c.name, n: c.n, mod: c.init, hp: c.hp, maxHp: c.maxHp, visible: item.visible });
       continue;
     }
     const pc = readPc(item.metadata);
     if (pc) pcs.push({ id: item.id, pc, visible: item.visible });
   }
   return { monsters, pcs };
+}
+
+/** Numbers already used by tokens of `creature` (skipping `except`). */
+export function usedNumbers(items: Item[], creature: string, except: Set<string> = new Set()): number[] {
+  const out: number[] = [];
+  for (const item of items) {
+    if (except.has(item.id)) continue;
+    const c = readCreature(item.metadata);
+    if (c && c.name === creature && c.n) out.push(c.n);
+  }
+  return out;
 }
 
 export function creatureFromEntry(entry: BestiaryEntry): TokenCreature {

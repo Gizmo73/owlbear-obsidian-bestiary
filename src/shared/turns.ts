@@ -1,7 +1,8 @@
 // Turn order, independent of Owlbear: grouping tokens into entries, sorting,
 // stepping turns and deciding what players may see.
 //
-// - Monsters of the same creature share one roll and act as one entry ("Goblin ×3").
+// - Every monster token is its own entry ("Goblin 1", "Goblin 2"), but tokens of the
+//   same creature share one roll, so they act back to back.
 // - PCs come from the chosen party (plus any token linked to a PC); the GM types their rolls.
 // - Held entries ("not in combat yet") and downed monsters are skipped and hidden from players.
 // - Players only ever get names and whose turn it is: never HP.
@@ -32,6 +33,8 @@ export interface PublicOrder {
 export interface MonsterToken {
   id: string;
   creature: string;
+  /** Per-creature number ("Goblin 2"). */
+  n?: number;
   /** Initiative modifier. */
   mod: number;
   hp: number;
@@ -57,6 +60,8 @@ export interface Entry {
   id: string;
   kind: "monster" | "pc";
   name: string;
+  /** Monsters: shared-roll group (one per creature). PCs: same as id. */
+  group: string;
   mod: number;
   init: number | null;
   held: boolean;
@@ -65,30 +70,54 @@ export interface Entry {
   tokens: EntryToken[];
 }
 
+/** Shared-roll group for a creature (also accepted as an entry id from 0.2.0 scenes). */
 export const monsterId = (creature: string) => `m:${matchKey(creature)}`;
+export const tokenEntryId = (tokenId: string) => `t:${tokenId}`;
 export const pcId = (name: string) => `p:${matchKey(name)}`;
+
+/** "Goblin 2" when there are several Goblins in the scene, plain "Goblin" when there's one. */
+export function monsterName(creature: string, n: number | undefined, siblings: number): string {
+  return siblings > 1 && n ? `${creature} ${n}` : creature;
+}
+
+/** Smallest unused positive numbers, e.g. used [1, 3] and count 2 -> [2, 4]. */
+export function nextNumbers(used: Iterable<number>, count: number): number[] {
+  const taken = new Set(used);
+  const out: number[] = [];
+  for (let n = 1; out.length < count; n++) if (!taken.has(n)) out.push(n);
+  return out;
+}
 
 export function buildEntries(monsters: MonsterToken[], pcTokens: PcToken[], state: CombatState): Entry[] {
   const byId = new Map<string, Entry>();
   const held = new Set(state.held);
-  const make = (id: string, kind: Entry["kind"], name: string, mod: number): Entry => ({
+  const initOf = (...ids: string[]) => {
+    for (const id of ids) if (typeof state.init[id] === "number") return state.init[id];
+    return null;
+  };
+  const make = (id: string, kind: Entry["kind"], name: string, mod: number, group = id): Entry => ({
     id,
     kind,
     name,
+    group,
     mod,
-    init: typeof state.init[id] === "number" ? state.init[id] : null,
-    held: held.has(id),
+    // Monsters fall back to their group's roll (how 0.2.0 stored it).
+    init: initOf(id, group),
+    held: held.has(id) || held.has(group),
     down: false,
     tokens: [],
   });
 
+  const siblings = new Map<string, number>();
+  for (const t of monsters) siblings.set(monsterId(t.creature), (siblings.get(monsterId(t.creature)) ?? 0) + 1);
   for (const t of monsters) {
-    const id = monsterId(t.creature);
-    const entry = byId.get(id) ?? make(id, "monster", t.creature, t.mod);
+    const group = monsterId(t.creature);
+    const id = tokenEntryId(t.id);
+    const entry = make(id, "monster", monsterName(t.creature, t.n, siblings.get(group)!), t.mod, group);
     entry.tokens.push({ id: t.id, hp: t.hp, maxHp: t.maxHp, visible: t.visible });
+    entry.down = t.hp <= 0;
     byId.set(id, entry);
   }
-  for (const e of byId.values()) e.down = e.tokens.every((t) => (t.hp ?? 1) <= 0);
 
   for (const name of state.members) {
     const id = pcId(name);
@@ -111,7 +140,7 @@ export function compareEntries(a: Entry, b: Entry): number {
   } else if (a.init !== b.init) return b.init - a.init;
   if (a.kind !== b.kind) return a.kind === "monster" ? -1 : 1;
   if (a.mod !== b.mod) return b.mod - a.mod;
-  return a.name.localeCompare(b.name);
+  return a.name.localeCompare(b.name, undefined, { numeric: true });
 }
 
 /** Entries that take turns: rolled, not held, not down. */
@@ -154,7 +183,23 @@ export function step(entries: Entry[], state: CombatState, dir: 1 | -1): Pick<Co
 }
 
 export function displayName(e: Entry): string {
-  return e.kind === "monster" && e.tokens.length > 1 ? `${e.name} ×${e.tokens.length}` : e.name;
+  return e.name;
+}
+
+/**
+ * Initiative for every monster entry that has none: one d20 per creature, shared by all
+ * its tokens. A creature that already has a roll (e.g. Goblin 4 linked mid-fight) joins it.
+ */
+export function rollMissing(entries: Entry[], init: Record<string, number>, d20: () => number): Record<string, number> {
+  const next = { ...init };
+  const groupRoll = new Map<string, number>();
+  for (const e of entries) if (e.kind === "monster" && e.init !== null && !groupRoll.has(e.group)) groupRoll.set(e.group, e.init);
+  for (const e of entries) {
+    if (e.kind !== "monster" || e.init !== null) continue;
+    if (!groupRoll.has(e.group)) groupRoll.set(e.group, d20() + e.mod);
+    next[e.id] = groupRoll.get(e.group)!;
+  }
+  return next;
 }
 
 /** What players see: rolled entries that are in the fight and visible on the map. No HP. */

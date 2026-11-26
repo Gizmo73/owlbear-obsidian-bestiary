@@ -9,13 +9,14 @@ import OBR, { isImage, type Item } from "@owlbear-rodeo/sdk";
 import { BestiarySearch } from "../shared/search";
 import { nameCandidates } from "../shared/names";
 import type { PartiesPayload } from "../shared/protocol";
-import { buildEntries, publicOrder } from "../shared/turns";
+import { buildEntries, nextNumbers, publicOrder } from "../shared/turns";
 import { BridgeClient } from "./bridge";
 import { startLabels } from "./labels";
 import { showRings } from "./rings";
 import {
   MENU_ID,
   ORDER_KEY,
+  TOKEN_KEY,
   asset,
   combatTokens,
   getPort,
@@ -179,11 +180,44 @@ function queueCombatUpdate() {
   }, 80);
 }
 
+/**
+ * Every linked token gets a unique number per creature ("Goblin 2"). Tokens linked before
+ * numbering existed get one, and copy-pasted tokens (which carry their original's number)
+ * get the next free one; the lower token in the stack keeps the original number.
+ * Returns true if it changed anything (the change event will run us again).
+ */
+async function fixNumbers(items: Item[]): Promise<boolean> {
+  const byCreature = new Map<string, Item[]>();
+  for (const item of items) {
+    const c = readCreature(item.metadata);
+    if (c) byCreature.set(c.name, [...(byCreature.get(c.name) ?? []), item]);
+  }
+  const updates = new Map<string, number>();
+  for (const list of byCreature.values()) {
+    const seen = new Set<number>();
+    const needs: Item[] = [];
+    for (const item of [...list].sort((a, b) => a.zIndex - b.zIndex)) {
+      const n = readCreature(item.metadata)!.n;
+      if (n && !seen.has(n)) seen.add(n);
+      else needs.push(item);
+    }
+    const fresh = nextNumbers(seen, needs.length);
+    needs.forEach((item, i) => updates.set(item.id, fresh[i]));
+  }
+  if (!updates.size) return false;
+  await OBR.scene.items.updateItems([...updates.keys()], (drafts) => {
+    for (const d of drafts) d.metadata[TOKEN_KEY] = { ...readCreature(d.metadata)!, n: updates.get(d.id) };
+  });
+  return true;
+}
+
 async function updateCombat() {
   if (!(await OBR.scene.isReady())) return;
+  const items = await OBR.scene.items.getItems();
+  if (await fixNumbers(items)) return;
   const metadata = await OBR.scene.getMetadata();
   const state = readCombat(metadata);
-  const { monsters, pcs } = combatTokens(await OBR.scene.items.getItems());
+  const { monsters, pcs } = combatTokens(items);
   const entries = buildEntries(monsters, pcs, state);
 
   const order = publicOrder(entries, state);
