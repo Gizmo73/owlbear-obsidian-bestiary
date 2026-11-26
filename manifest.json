@@ -1,0 +1,9 @@
+{
+  "id": "owlbear-bestiary-bridge",
+  "name": "Owlbear Bestiary Bridge",
+  "version": "0.2.0",
+  "minAppVersion": "1.5.0",
+  "description": "Connects the Obsidian Bestiary extension in Owlbear Rodeo to your Fantasy Statblocks bestiary and Creature pane.",
+  "author": "Gizmo73",
+  "isDesktopOnly": true
+}

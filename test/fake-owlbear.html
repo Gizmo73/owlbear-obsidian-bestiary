@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Fake Owlbear host (tests only)</title>
+<style>body{margin:0;background:#222;font:12px monospace;color:#ccc}iframe{border:1px solid #555;background:#2a2a33;vertical-align:top}</style>
+</head>
+<body>
+<!--
+  A stand-in for Owlbear Rodeo that speaks just enough of the SDK's postMessage
+  protocol to run the real extension pages. Loaded at https://www.owlbear.rodeo/
+  by Playwright route interception. Test code drives it through window.host.
+-->
+<div id="frames"></div>
+<script>
+(() => {
+  const ORIGIN = "https://www.owlbear.rodeo";
+  const ROOM = "test-room";
+  const EXT = new URLSearchParams(location.search).get("ext");
+  const obrref = btoa(`${ORIGIN} ${ROOM}`);
+
+  const state = {
+    role: "GM",
+    name: "DM",
+    selection: [],
+    items: [],
+    local: [],
+    menus: {},
+    sceneMeta: {},
+    log: [],
+  };
+  const subs = { player: new Set(), items: new Set(), local: new Set(), meta: new Set() };
+  const frames = {};
+
+  const clone = (x) => JSON.parse(JSON.stringify(x));
+  const player = () => ({ id: "user-1", connectionId: "c1", role: state.role, name: state.name, color: "#f00", syncView: false, metadata: {}, selection: state.selection });
+  const emit = (set, id, data) => set.forEach((w) => w.postMessage({ id, data: clone(data) }, "*"));
+
+  function bounds(ids) {
+    const its = state.items.filter((i) => ids.includes(i.id));
+    const half = 75;
+    const xs = its.map((i) => i.position.x), ys = its.map((i) => i.position.y);
+    const min = { x: Math.min(...xs) - half, y: Math.min(...ys) - half };
+    const max = { x: Math.max(...xs) + half, y: Math.max(...ys) + half };
+    return { min, max, center: { x: (min.x + max.x) / 2, y: (min.y + max.y) / 2 }, width: max.x - min.x, height: max.y - min.y };
+  }
+
+  function applyUpdates(list, updates) {
+    for (const u of updates) {
+      const item = list.find((i) => i.id === u.id);
+      if (!item) continue;
+      for (const [k, v] of Object.entries(u)) if (k !== "id" && k !== "type") item[k] = clone(v);
+    }
+  }
+
+  const handlers = {
+    OBR_PLAYER_GET_ROLE: () => ({ role: state.role }),
+    OBR_PLAYER_GET_NAME: () => ({ name: state.name }),
+    OBR_PLAYER_GET_SELECTION: () => ({ selection: state.selection }),
+    OBR_PLAYER_GET_ID: () => ({ id: "user-1" }),
+    OBR_PLAYER_SUBSCRIBE: (d, src) => { subs.player.add(src); },
+    OBR_PLAYER_SELECT: (d) => {
+      state.selection = d.replace ? [...d.items] : [...new Set([...state.selection, ...d.items])];
+      queueMicrotask(() => emit(subs.player, "OBR_PLAYER_EVENT_CHANGE", { player: player() }));
+      return {};
+    },
+    OBR_SCENE_GET_METADATA: () => ({ metadata: state.sceneMeta }),
+    OBR_SCENE_SET_METADATA: (d) => {
+      Object.assign(state.sceneMeta, clone(d.update));
+      queueMicrotask(() => emit(subs.meta, "OBR_SCENE_METADATA_EVENT_CHANGE", { metadata: state.sceneMeta }));
+      return {};
+    },
+    OBR_SCENE_METADATA_SUBSCRIBE: (d, src) => { subs.meta.add(src); },
+    OBR_ACTION_SET_WIDTH: () => ({}),
+    OBR_ACTION_SET_HEIGHT: () => ({}),
+    OBR_SCENE_IS_READY: () => ({ ready: true }),
+    OBR_SCENE_READY_SUBSCRIBE: () => undefined,
+    OBR_SCENE_GRID_GET_DPI: () => ({ dpi: 150 }),
+    OBR_SCENE_ITEMS_GET_ITEMS: (d) => ({ items: state.items.filter((i) => d.ids.includes(i.id)) }),
+    OBR_SCENE_ITEMS_GET_ALL_ITEMS: () => ({ items: state.items }),
+    OBR_SCENE_ITEMS_GET_ITEM_BOUNDS: (d) => ({ bounds: bounds(d.ids) }),
+    OBR_SCENE_ITEMS_SUBSCRIBE: (d, src) => { subs.items.add(src); },
+    OBR_SCENE_ITEMS_UPDATE_ITEMS: (d) => {
+      applyUpdates(state.items, d.updates);
+      queueMicrotask(() => emit(subs.items, "OBR_SCENE_ITEMS_EVENT_CHANGE", { items: state.items }));
+      return {};
+    },
+    OBR_SCENE_LOCAL_GET_ALL_ITEMS: () => ({ items: state.local }),
+    OBR_SCENE_LOCAL_GET_ITEMS: (d) => ({ items: state.local.filter((i) => d.ids.includes(i.id)) }),
+    OBR_SCENE_LOCAL_ADD_ITEMS: (d) => { state.local.push(...clone(d.items)); return {}; },
+    OBR_SCENE_LOCAL_UPDATE_ITEMS: (d) => { applyUpdates(state.local, d.updates); return {}; },
+    OBR_SCENE_LOCAL_DELETE_ITEMS: (d) => { state.local = state.local.filter((i) => !d.ids.includes(i.id)); return {}; },
+    OBR_SCENE_LOCAL_SUBSCRIBE: (d, src) => { subs.local.add(src); },
+    OBR_CONTEXT_MENU_CREATE: (d) => { state.menus[d.id] = d; return {}; },
+    OBR_THEME_GET_THEME: () => ({ theme: { mode: "DARK", primary: { light: "#d4c4ff", main: "#bb99ff", dark: "#8f6fd9", contrastText: "#000" }, secondary: { light: "#fff", main: "#ee99ff", dark: "#c070d0", contrastText: "#000" }, background: { default: "#1e2231", paper: "#3d4051" }, text: { primary: "#fff", secondary: "rgba(255,255,255,0.7)", disabled: "rgba(255,255,255,0.5)" } } }),
+    OBR_THEME_SUBSCRIBE: () => undefined,
+  };
+
+  window.addEventListener("message", (e) => {
+    const msg = e.data;
+    if (!msg || typeof msg.id !== "string" || !msg.id.startsWith("OBR_")) return;
+    const handler = handlers[msg.id];
+    state.log.push(msg.id);
+    if (!handler) {
+      if (msg.nonce) e.source.postMessage({ id: `${msg.id}_RESPONSE${msg.nonce}`, data: {} }, "*");
+      state.log.push(`UNHANDLED ${msg.id}`);
+      return;
+    }
+    const data = handler(msg.data ?? {}, e.source);
+    if (msg.nonce) e.source.postMessage({ id: `${msg.id}_RESPONSE${msg.nonce}`, data: clone(data ?? {}) }, "*");
+  });
+
+  function open(name, file, w, h) {
+    return new Promise((resolve) => {
+      frames[name]?.remove();
+      const f = document.createElement("iframe");
+      f.name = name;
+      f.width = w;
+      f.height = h;
+      f.src = `${EXT}${file}?obrref=${obrref}`;
+      f.onload = () => {
+        f.contentWindow.postMessage({ id: "OBR_READY", data: { ref: `ref-${name}`, userId: "user-1" } }, "*");
+        resolve();
+      };
+      document.getElementById("frames").appendChild(f);
+      frames[name] = f;
+    });
+  }
+
+  window.host = {
+    state,
+    open,
+    close: (name) => { frames[name]?.remove(); delete frames[name]; },
+    addToken(id, name, x, y, label = "") {
+      state.items.push({ id, type: "IMAGE", name, layer: "CHARACTER", visible: true, locked: false, position: { x, y }, rotation: 0, scale: { x: 1, y: 1 }, metadata: {}, text: { plainText: label, type: "PLAIN" }, zIndex: 0, createdUserId: "user-1", lastModified: "", lastModifiedUserId: "user-1" });
+    },
+    select(ids) {
+      state.selection = ids;
+      emit(subs.player, "OBR_PLAYER_EVENT_CHANGE", { player: player() });
+    },
+    /** Change items as another client would, then fire the change event. */
+    editItems(fn) {
+      fn(state.items);
+      emit(subs.items, "OBR_SCENE_ITEMS_EVENT_CHANGE", { items: state.items });
+    },
+  };
+})();
+</script>
+</body>
+</html>

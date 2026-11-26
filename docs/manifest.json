@@ -1,0 +1,17 @@
+{
+  "name": "Obsidian Bestiary",
+  "version": "0.2.0",
+  "manifest_version": 1,
+  "action": {
+    "title": "Obsidian Bestiary",
+    "icon": "https://gizmo73.github.io/owlbear-obsidian-bestiary/icon.svg",
+    "popover": "https://gizmo73.github.io/owlbear-obsidian-bestiary/popover.html",
+    "width": 360,
+    "height": 560
+  },
+  "icon": "https://gizmo73.github.io/owlbear-obsidian-bestiary/icon.svg",
+  "background_url": "https://gizmo73.github.io/owlbear-obsidian-bestiary/background.html",
+  "author": "Gizmo73",
+  "homepage_url": "https://github.com/Gizmo73/owlbear-obsidian-bestiary",
+  "description": "Link tokens to statblocks in your Obsidian vault, track HP, and open statblocks in Obsidian's Creature pane."
+}
