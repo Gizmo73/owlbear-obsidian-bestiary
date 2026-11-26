@@ -195,11 +195,21 @@ await page.waitForTimeout(400);
 check("unlink removes link and labels", JSON.stringify(await hpOf()) === "[null,null]" && (await page.evaluate(() => host.state.local.length)) === 0);
 
 // 7. bestiary edits in Obsidian reach Owlbear
-entries = [...entries, H.toEntry({ name: "Bugbear", hp: 27, ac: 16, stats: [15, 14, 13, 8, 11, 9], cr: 1 })];
+entries = [
+  ...entries,
+  H.toEntry({ name: "Bugbear", hp: 27, ac: 16, stats: [15, 14, 13, 8, 11, 9], cr: 1 }),
+  // a creature note that shares a PC's name (like "Selestia" in the vault)
+  H.toEntry({ name: "Malakyr", hp: 4, ac: 10, stats: [10, 10, 10, 10, 10, 10], cr: 0 }),
+];
 version = H.indexVersion(entries);
 server.broadcast({ push: "bestiaryChanged", version, creatureCount: entries.length });
 await page.waitForTimeout(800);
-check("pushed bestiary change refetched", /7 creatures/.test((await connText()) ?? ""));
+check("pushed bestiary change refetched", /8 creatures/.test((await connText()) ?? ""));
+await page.evaluate(() => host.addToken("pc2", "Malakyr", 600, 600));
+const shownBefore = shown.length;
+await page.evaluate(() => host.select(["pc2"]));
+await page.waitForTimeout(400);
+check("a token named after a PC never opens the Creature pane", shown.length === shownBefore, shown.slice(shownBefore).join(","));
 
 // ------------------------------------------------------------ 8. turn order
 const P = () => frame("popover");

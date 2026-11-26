@@ -7,7 +7,7 @@
 
 import OBR, { isImage, type Item } from "@owlbear-rodeo/sdk";
 import { BestiarySearch } from "../shared/search";
-import { nameCandidates } from "../shared/names";
+import { matchKey, nameCandidates } from "../shared/names";
 import type { PartiesPayload } from "../shared/protocol";
 import { buildEntries, nextNumbers, publicOrder } from "../shared/turns";
 import { BridgeClient } from "./bridge";
@@ -151,7 +151,11 @@ async function onSelection(ids: string[] | undefined) {
   if (name) await showInObsidian(name);
 }
 
-/** Linked token wins; otherwise a single unlinked character token whose name matches a creature. */
+/**
+ * Linked monster token wins; otherwise a single unlinked character token whose name matches
+ * a creature. PCs never open the Creature pane: not when linked to a PC, and not when the
+ * token is named after a party member (even if a creature note shares the name).
+ */
 function creatureNameFor(items: Item[]): string | null {
   for (const item of items) {
     const c = readCreature(item.metadata);
@@ -160,7 +164,10 @@ function creatureNameFor(items: Item[]): string | null {
   const only = items.length === 1 ? items[0] : null;
   if (!only || only.layer !== "CHARACTER" || !search || readPc(only.metadata)) return null;
   const label = isImage(only) ? (only.text?.plainText ?? "") : "";
-  for (const candidate of nameCandidates({ name: only.name, label })) {
+  const candidates = nameCandidates({ name: only.name, label });
+  const pcKeys = new Set((parties?.pcs ?? []).map(matchKey));
+  if (candidates.some((c) => pcKeys.has(matchKey(c)))) return null;
+  for (const candidate of candidates) {
     const hit = search.find(candidate);
     if (hit) return hit.name;
   }

@@ -4414,7 +4414,10 @@
     const only = items.length === 1 ? items[0] : null;
     if (!only || only.layer !== "CHARACTER" || !search || readPc(only.metadata)) return null;
     const label = isImage(only) ? only.text?.plainText ?? "" : "";
-    for (const candidate of nameCandidates({ name: only.name, label })) {
+    const candidates = nameCandidates({ name: only.name, label });
+    const pcKeys = new Set((parties?.pcs ?? []).map(matchKey));
+    if (candidates.some((c) => pcKeys.has(matchKey(c)))) return null;
+    for (const candidate of candidates) {
       const hit = search.find(candidate);
       if (hit) return hit.name;
     }
