@@ -29,6 +29,9 @@
     pickerCalls: [],
     /** When set, the asset picker rejects with this (Owlbear sent a non-Error object). */
     pickerError: null,
+    /** One answer per picker call (falls back to nextPicks). */
+    pickQueue: [],
+    notifications: [],
     log: [],
   };
   const subs = { player: new Set(), items: new Set(), local: new Set(), meta: new Set() };
@@ -76,7 +79,7 @@
     OBR_ASSETS_DOWNLOAD_IMAGES: (d) => {
       state.pickerCalls.push(d);
       if (state.pickerError) throw state.pickerError;
-      const images = state.nextPicks;
+      const images = state.pickQueue.length ? state.pickQueue.shift() : state.nextPicks;
       state.nextPicks = [];
       return { images };
     },
@@ -91,6 +94,7 @@
       queueMicrotask(() => emit(subs.items, "OBR_SCENE_ITEMS_EVENT_CHANGE", { items: state.items }));
       return {};
     },
+    OBR_NOTIFICATION_SHOW: (d) => { state.notifications.push(d); return { id: `n${state.notifications.length}` }; },
     OBR_ACTION_SET_WIDTH: () => ({}),
     OBR_ACTION_SET_HEIGHT: () => ({}),
     OBR_SCENE_IS_READY: () => ({ ready: true }),

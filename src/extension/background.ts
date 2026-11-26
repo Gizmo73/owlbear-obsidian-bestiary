@@ -8,11 +8,12 @@
 import OBR, { isImage, type Item } from "@owlbear-rodeo/sdk";
 import { BestiarySearch } from "../shared/search";
 import { matchKey, nameCandidates } from "../shared/names";
-import type { PartiesPayload, TokenArt } from "../shared/protocol";
+import type { EncountersPayload, PartiesPayload, TokenArt } from "../shared/protocol";
 import { buildEntries, nextNumbers, publicOrder } from "../shared/turns";
 import { BridgeClient } from "./bridge";
 import { startLabels } from "./labels";
 import { showRings } from "./rings";
+import { describeInsert, insertCreatures } from "./insert";
 import {
   MENU_ID,
   ORDER_KEY,
@@ -20,6 +21,7 @@ import {
   asset,
   combatTokens,
   getPort,
+  loadEncounters,
   loadIndex,
   loadParties,
   openChannel,
@@ -27,6 +29,7 @@ import {
   readCreature,
   readOrder,
   readPc,
+  saveEncounters,
   saveIndex,
   saveParties,
   type BridgeStatus,
@@ -38,6 +41,7 @@ let status: BridgeStatus = { state: "connecting", port: getPort() };
 let index: CachedIndex | null = loadIndex();
 let search = index ? new BestiarySearch(index.creatures) : null;
 let parties: PartiesPayload | null = loadParties();
+let encounters: EncountersPayload | null = loadEncounters();
 let bridge: BridgeClient | null = null;
 let playerName = "";
 let gmStarted = false;
@@ -78,6 +82,16 @@ function onChannel(msg: ChannelMessage) {
       break;
     case "save-art":
       void partyRequest({ kind: "saveTokenArt", art: msg.art }, 3);
+      break;
+    case "get-encounters":
+      channel.post({ type: "encounters", payload: encounters });
+      void fetchEncounters();
+      break;
+    case "remove-encounter":
+      void encounterRequest({ kind: "removeEncounter", encounterId: msg.id });
+      break;
+    case "save-creature-art":
+      void encounterRequest({ kind: "saveCreatureArt", art: msg.art });
       break;
     default:
       break;
@@ -136,6 +150,50 @@ async function partyRequest(
   } catch (err) {
     channel.post({ type: "parties", parties, error: (err as Error).message });
   }
+}
+
+// ------------------------------------------------------------ encounters
+
+async function fetchEncounters() {
+  if (!partiesSupported(4)) return;
+  try {
+    encounters = await bridge!.request({ kind: "getEncounters" });
+    saveEncounters(encounters);
+    channel.post({ type: "encounters", payload: encounters });
+  } catch {
+    /* keep the cached list */
+  }
+}
+
+async function encounterRequest(
+  req: { kind: "removeEncounter"; encounterId: string } | { kind: "saveCreatureArt"; art: Record<string, TokenArt | null> },
+) {
+  if (!partiesSupported(4)) {
+    channel.post({
+      type: "encounters",
+      payload: encounters,
+      error: bridge?.connected ? "Update Owlbear Bestiary Bridge in Obsidian to use encounters" : "Connect to Obsidian to change the encounter list",
+    });
+    return;
+  }
+  try {
+    encounters = await bridge!.request(req);
+    saveEncounters(encounters);
+    channel.post({ type: "encounters", payload: encounters });
+  } catch (err) {
+    channel.post({ type: "encounters", payload: encounters, error: (err as Error).message });
+  }
+}
+
+/** "Add to Owlbear" from a statblock in Obsidian: one hidden, linked token at the view centre. */
+async function addCreature(name: string) {
+  const result = await insertCreatures([{ name, count: 1 }], {
+    search,
+    art: encounters?.art ?? {},
+    saveArt: (art) => void encounterRequest({ kind: "saveCreatureArt", art }),
+    hidden: true,
+  });
+  await OBR.notification.show(describeInsert(result, true), result.placed.length ? "SUCCESS" : "WARNING");
 }
 
 async function showInObsidian(name: string) {
@@ -278,11 +336,14 @@ function startGm() {
       });
       if (!index || index.version !== welcome.bestiaryVersion || index.vault !== welcome.vault) void fetchBestiary();
       void fetchParties();
+      void fetchEncounters();
     },
     onDisconnected: (error) => setStatus({ state: "offline", error }),
     onPush: (push) => {
       if (push.push === "bestiaryChanged" && push.version !== index?.version) void fetchBestiary();
       if (push.push === "partiesChanged") void fetchParties();
+      if (push.push === "encountersChanged") void fetchEncounters();
+      if (push.push === "addCreature") void addCreature(push.name).catch((err) => console.warn("[obsidian-bestiary] add failed", err));
     },
   });
   bridge.start();

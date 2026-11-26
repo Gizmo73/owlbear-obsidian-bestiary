@@ -52,9 +52,21 @@ const shown = [];
 const byKey = () => new Map(entries.map((e) => [H.matchKey(e.name), e.name]));
 let ownParties = [];
 let tokenArt = {};
+let creatureArt = {};
+let staged = [
+  {
+    id: "block:Castle Never.md::Foyer Gargoyles",
+    name: "Foyer Gargoyles",
+    from: "Castle Never",
+    creatures: [{ name: "Goblin", count: 3 }, { name: "Hobgoblin", count: 1, hp: 20 }, { name: "Mystery Beast", count: 1 }],
+    addedAt: 2,
+  },
+  { id: "it:Orcs and Giant", name: "Orcs and Giant", from: "Initiative Tracker", creatures: [{ name: "Bugbear", count: 2 }], addedAt: 1 },
+];
+const encountersPayload = () => ({ encounters: [...staged].sort((a, b) => b.addedAt - a.addedAt), art: creatureArt });
 const partiesPayload = () => ({
   art: tokenArt,
-  parties: [{ name: "LiS", members: ["Berald", "Dogg"], source: "initiative-tracker" }, ...ownParties.map((p) => ({ ...p, source: "bridge" }))],
+  parties: [{ name: "LiS", members: ["Berald", "Dogg"], source: "bridge" }, ...ownParties.map((p) => ({ ...p, source: "bridge" }))],
   pcs: ["Berald", "Dogg", "Malakyr", ...ownParties.flatMap((p) => p.members)],
 });
 
@@ -82,6 +94,16 @@ const server = H.startBridgeServer({
         else delete tokenArt[name];
       }
       ok(partiesPayload());
+    } else if (msg.kind === "getEncounters") ok(encountersPayload());
+    else if (msg.kind === "removeEncounter") {
+      staged = staged.filter((e) => e.id !== msg.encounterId);
+      ok(encountersPayload());
+    } else if (msg.kind === "saveCreatureArt") {
+      for (const [name, art] of Object.entries(msg.art)) {
+        if (art) creatureArt[name] = art;
+        else delete creatureArt[name];
+      }
+      ok(encountersPayload());
     } else if (msg.kind === "deleteParty") {
       ownParties = ownParties.filter((p) => p.name !== msg.name);
       ok(partiesPayload());
@@ -367,7 +389,7 @@ await P().locator("#party-extra").fill("Zed");
 await P().locator("#party-form button[type=submit]").click();
 await page.waitForTimeout(500);
 check("new party saved through the plugin and applied", JSON.stringify(ownParties) === '[{"name":"Skirmish","members":["Malakyr","Zed"]}]' && (await sceneMeta("combat")).party === "Skirmish");
-check("panel offers it under 'Made in Owlbear' with Edit", (await P().locator("#party optgroup[label='Made in Owlbear'] option").allTextContents()).includes("Skirmish") && (await P().locator("#edit-party").count()) === 1);
+check("panel lists it with the other parties, with Edit", (await P().locator("#party option").allTextContents()).includes("Skirmish") && (await P().locator("#edit-party").count()) === 1);
 
 // insert the party: Malakyr's token is already on the map (named, unlinked); Zed's image is picked
 const asset = (name) => ({
@@ -450,7 +472,50 @@ await setInit("p:berald", 20);
 await P().locator("#next").click();
 await page.waitForTimeout(400);
 
-// ------------------------------------------------------------ 9. players
+// ------------------------------------------------------------ 9. encounters
+const goblinsOnMap = () => page.evaluate(() => host.state.items.filter((i) => i.metadata["com.gizmo73.obsidian-bestiary/creature"]?.name === "Goblin"));
+const opts = await P().locator("#encounter option").allTextContents();
+check("panel lists the encounters sent from Obsidian, newest first", JSON.stringify(opts) === '["Foyer Gargoyles","Orcs and Giant"]', JSON.stringify(opts));
+const summary = await P().locator(".enc-summary").innerText();
+check("shows what's in it and which creatures still need a token", /Goblin ×3, Hobgoblin, Mystery Beast/.test(summary) && /Castle Never/.test(summary) && /pick a token for Goblin, Hobgoblin, Mystery Beast/.test(summary), summary.replace(/\s+/g, " "));
+const before = (await goblinsOnMap()).map((g) => g.metadata["com.gizmo73.obsidian-bestiary/creature"].n).sort((a, b) => a - b);
+await page.evaluate((q) => { host.state.pickQueue = q; }, [[asset("Goblin Token")], [asset("Hobgoblin")], [asset("Strange Thing")]]);
+const callsBefore = (await page.evaluate(() => host.state.pickerCalls)).length;
+await P().locator("#insert-encounter").click();
+await page.waitForTimeout(900);
+const calls = (await page.evaluate(() => host.state.pickerCalls)).slice(callsBefore);
+check("first insert: one picker per creature, searched by name, single pick", JSON.stringify(calls.map((c) => [c.defaultSearch, c.multiple])) === '[["Goblin",false],["Hobgoblin",false],["Mystery Beast",false]]', JSON.stringify(calls));
+const newGoblins = (await goblinsOnMap()).filter((g) => g.image?.url?.endsWith("/Goblin Token.png"));
+check("monsters arrive hidden, linked and numbered after those already there", newGoblins.length === 3 && newGoblins.every((g) => g.visible === false) && JSON.stringify(newGoblins.map((g) => g.metadata["com.gizmo73.obsidian-bestiary/creature"].n).sort((a, b) => a - b)) === JSON.stringify([1, 2, 3].map((k) => Math.max(...before) + k)), JSON.stringify({ before, now: newGoblins.map((g) => g.metadata["com.gizmo73.obsidian-bestiary/creature"].n) }));
+const hob = (await byImage("Hobgoblin"))[0];
+check("block's HP override used", hob?.metadata["com.gizmo73.obsidian-bestiary/creature"]?.maxHp === 20 && hob.visible === false);
+const beast = (await byImage("Strange Thing"))[0];
+check("creature not in the bestiary placed hidden and unlinked", beast && !beast.metadata["com.gizmo73.obsidian-bestiary/creature"] && beast.visible === false);
+const ys = [...new Set([...newGoblins, hob, beast].map((i) => i.position.y))];
+check("one row per creature at the view centre", ys.length === 3 && new Set(newGoblins.map((g) => g.position.y)).size === 1, JSON.stringify(ys));
+check("token images saved to the vault per creature", JSON.stringify(Object.keys(creatureArt).sort()) === '["Goblin","Hobgoblin","Mystery Beast"]');
+const encNotice = await P().locator(".notice").last().innerText();
+check("panel reports what was added", /Added Goblin ×3, Hobgoblin \(hidden\)/.test(encNotice) && /Mystery Beast placed unlinked/.test(encNotice), encNotice);
+check("hidden newcomers sit greyed in the turn order", (await rows()).filter((x) => x.id.startsWith("t:") && newGoblins.some((g) => x.id === `t:${g.id}`)).every((x) => x.cls.includes("held")));
+await P().locator("#insert-encounter").click();
+await page.waitForTimeout(600);
+check("inserting again uses the saved images, no picker", (await page.evaluate(() => host.state.pickerCalls)).length === callsBefore + 3 && (await byImage("Goblin Token")).length === 6);
+await P().locator("body").screenshot({ path: join(tmp, "panel-encounters.png") });
+await P().locator("#remove-encounter").click();
+await page.waitForTimeout(400);
+const optsAfter = await P().locator("#encounter option").allTextContents();
+check("✕ removes it from the list (kept in the vault until then)", staged.length === 1 && JSON.stringify(optsAfter) === '["Orcs and Giant"]', JSON.stringify({ staged: staged.length, optsAfter }));
+
+// "Add to Owlbear" from a statblock in Obsidian
+const goblinCount = (await goblinsOnMap()).length;
+server.broadcast({ push: "addCreature", name: "Goblin" });
+await page.waitForTimeout(700);
+const all = await goblinsOnMap();
+const added = all.filter((g) => !newGoblins.some((n) => n.id === g.id)).at(-1);
+check("Add to Owlbear: one hidden, linked, numbered goblin from the saved image", all.length === goblinCount + 1 && added.visible === false && added.image?.url?.endsWith("/Goblin Token.png") && added.metadata["com.gizmo73.obsidian-bestiary/creature"].n === Math.max(...all.map((g) => g.metadata["com.gizmo73.obsidian-bestiary/creature"].n)));
+check("Owlbear shows a notification", /Added Goblin \(hidden\)/.test((await page.evaluate(() => host.state.notifications.at(-1)?.message)) ?? ""));
+
+// ------------------------------------------------------------ 10. players
 await page.evaluate(() => { host.state.role = "PLAYER"; host.state.local = []; });
 await page.evaluate(() => host.open("background", "background.html", 0, 0));
 await page.evaluate(() => host.open("popover", "popover.html", 360, 320));

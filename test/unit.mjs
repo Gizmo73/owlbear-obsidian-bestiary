@@ -16,7 +16,7 @@ await build({
   stdin: {
     contents: `export * from "../src/shared/names.ts"; export * from "../src/shared/hp.ts";
 export * from "../src/shared/search.ts"; export * from "../src/shared/bestiary.ts"; export * from "../src/shared/turns.ts";
-export * from "../src/shared/party.ts";`,
+export * from "../src/shared/party.ts"; export * from "../src/shared/encounter.ts";`,
     resolveDir: join(root, "test"),
     loader: "ts",
   },
@@ -115,6 +115,34 @@ eq("token label counts as its name", asObj(S.matchPicks([{ name: "token-01", lab
 eq("ambiguous prefixes aren't guessed", asObj(S.matchPicks(picked(["Val A", "Val B"]), ["Val"])), { matched: {}, unmatched: [0, 1] });
 eq("an image is used once", asObj(S.matchPicks(picked(["Dogg"]), ["Dogg", "Dogg Jr"])), { matched: { Dogg: 0 }, unmatched: [] });
 eq("row centred on the view", S.rowPositions({ x: 500, y: 300 }, 3, 150), [{ x: 350, y: 300 }, { x: 500, y: 300 }, { x: 650, y: 300 }]);
+
+// ------------------------------------------------------------ encounter blocks (as YAML decodes them)
+// "- 1: Drowned Master" -> {1: "Drowned Master"}; "- 5:Gargoyle" -> "5:Gargoyle"; "- " -> null
+eq("vault block shapes", S.parseEncounterBlock({ name: "Foyer", party: "Current", creatures: [{ 5: "Gargoyle" }, "3:Swarm of Bats", null, "Owlbear"] }), {
+  name: "Foyer", party: "Current",
+  creatures: [{ name: "Gargoyle", count: 5 }, { name: "Swarm of Bats", count: 3 }, { name: "Owlbear", count: 1 }],
+});
+eq("Initiative Tracker extras: hp, ac, mod, hidden, ally", ["2: Goblin, 10, 15, 3", "Wolf, ally", "Shadow, hidden", { 3: ["Orc", 20] }, { creature: "Ogre", hp: 70, hidden: true }].map(S.parseCreature), [
+  { name: "Goblin", count: 2, hp: 10, ac: 15, mod: 3 },
+  { name: "Wolf", count: 1, ally: true },
+  { name: "Shadow", count: 1, hidden: true },
+  { name: "Orc", count: 3, hp: 20 },
+  { name: "Ogre", count: 1, hp: 70, hidden: true },
+]);
+eq("same creature listed twice adds up", S.parseEncounterBlock({ creatures: ["2: Goblin", "Goblin", "Goblin, 10"] }).creatures, [{ name: "Goblin", count: 3 }, { name: "Goblin", count: 1, hp: 10 }]);
+eq("no name / no creatures is fine", S.parseEncounterBlock(null), { name: undefined, party: undefined, creatures: [] });
+eq("summary", S.summarize([{ name: "Goblin", count: 12 }, { name: "Hobgoblin Iron Chaplain", count: 1 }]), "Goblin ×12, Hobgoblin Iron Chaplain");
+
+// ------------------------------------------------------------ Initiative Tracker import (the copy of its data in this repo)
+const itData = JSON.parse(await readFile(join(root, "Initiative Tracker", "data.json"), "utf8"));
+const imp = S.importInitiativeTracker(itData, 1);
+eq("imports every party and player", [imp.parties.length, imp.players.length], [itData.parties.length, itData.players.filter((p) => p.player !== false).length]);
+eq("LiS party members", imp.parties.find((p) => p.name === "LiS").members, ["Berald", "Dogg", "Malakyr", "Steffan", "Valco", "Ezekiel", "Yorik"]);
+const byName = (cs) => [...cs].sort((a, b) => a.name.localeCompare(b.name));
+eq("saved encounters keep monsters only, grouped", byName(imp.encounters.find((e) => e.name === "Goblin Ambush (Bane)").creatures), byName([
+  { name: "Hobgoblin Iron Chaplain", count: 1 }, { name: "Hobgoblin Regular", count: 4 }, { name: "Goblin", count: 12 },
+]));
+eq("all 7 saved encounters, stable ids", imp.encounters.map((e) => e.id).length === 7 && imp.encounters.every((e) => e.id.startsWith("it:") && e.from === "Initiative Tracker"), true);
 
 // ------------------------------------------------------------ search on real vault names
 const vault = join(root, "..", "campaign-master", "Campaign", "Statblocks");

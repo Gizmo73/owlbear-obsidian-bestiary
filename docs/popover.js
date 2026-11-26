@@ -6,6 +6,7 @@
   var __getOwnPropNames = Object.getOwnPropertyNames;
   var __getProtoOf = Object.getPrototypeOf;
   var __hasOwnProp = Object.prototype.hasOwnProperty;
+  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
   var __commonJS = (cb, mod) => function __require() {
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
@@ -25,6 +26,7 @@
     isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
     mod
   ));
+  var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
   // node_modules/events/events.js
   var require_events = __commonJS({
@@ -3760,6 +3762,11 @@
   }
   var lib_default = OBR;
 
+  // src/shared/encounter.ts
+  function summarize(creatures) {
+    return creatures.map((c) => c.count > 1 ? `${c.name} \xD7${c.count}` : c.name).join(", ");
+  }
+
   // src/shared/names.ts
   function matchKey(name) {
     return name.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -3779,68 +3786,107 @@
     return [...new Set(out)];
   }
 
-  // src/shared/party.ts
-  function matchPicks(picks, members) {
-    const matched = /* @__PURE__ */ new Map();
-    const used = /* @__PURE__ */ new Set();
-    const keysOf = (p) => [p.name, p.label ?? ""].map(matchKey).filter(Boolean);
-    for (const member of members) {
-      const key = matchKey(member);
-      const i = picks.findIndex((p, idx) => !used.has(idx) && keysOf(p).includes(key));
-      if (i !== -1) {
-        matched.set(member, i);
-        used.add(i);
-      }
+  // src/shared/search.ts
+  var words = (s) => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  var BestiarySearch = class {
+    constructor(entries2) {
+      __publicField(this, "items");
+      this.items = entries2.map((entry) => ({ entry, key: matchKey(entry.name), words: words(entry.name) })).sort((a, b) => a.entry.name.localeCompare(b.entry.name));
     }
-    for (const member of members) {
-      if (matched.has(member)) continue;
-      const key = matchKey(member);
-      const candidates = picks.map((p, idx) => ({ idx, keys: keysOf(p) })).filter(({ idx, keys }) => !used.has(idx) && keys.some((k) => k.startsWith(key) || key.startsWith(k)));
-      if (candidates.length === 1) {
-        matched.set(member, candidates[0].idx);
-        used.add(candidates[0].idx);
-      }
+    get size() {
+      return this.items.length;
     }
-    const unmatched = picks.map((_, i) => i).filter((i) => !used.has(i));
-    return { matched, unmatched };
-  }
-  function rowPositions(center, count, spacing) {
-    return Array.from({ length: count }, (_, i) => ({ x: center.x + (i - (count - 1) / 2) * spacing, y: center.y }));
+    /** Exact match on the loose key ("Kuo Toa" finds "Kuo-Toa"). */
+    find(name) {
+      const key = matchKey(name);
+      return this.items.find((i) => i.key === key)?.entry ?? null;
+    }
+    search(query, limit = 8) {
+      const q = matchKey(query);
+      if (!q) return this.items.slice(0, limit).map((i) => i.entry);
+      const qWords = words(query);
+      const scored = [];
+      for (const item of this.items) {
+        let score;
+        if (item.key === q) score = 0;
+        else if (item.key.startsWith(q)) score = 1;
+        else if (qWords.length && qWords.every((w) => item.words.some((nw) => nw.startsWith(w)))) score = 2;
+        else if (item.key.includes(q)) score = 3;
+        else if (isSubsequence(q, item.key)) score = 4;
+        else continue;
+        scored.push({ item, score });
+      }
+      scored.sort(
+        (a, b) => a.score - b.score || a.item.entry.name.length - b.item.entry.name.length || a.item.entry.name.localeCompare(b.item.entry.name)
+      );
+      return scored.slice(0, limit).map((s) => s.item.entry);
+    }
+  };
+  function isSubsequence(needle, hay) {
+    let i = 0;
+    for (let j = 0; j < hay.length && i < needle.length; j++) if (hay[j] === needle[i]) i++;
+    return i === needle.length;
   }
 
-  // src/shared/hp.ts
-  function parseHpInput(input) {
-    const s = input.trim().toLowerCase().replace(/\s+/g, "");
-    if (!s) return null;
-    let m = /^(?:max|m)=?(\d+)$/.exec(s);
-    if (m) return { kind: "max", amount: Number(m[1]) };
-    m = /^=(-?\d+)$/.exec(s);
-    if (m) return { kind: "set", amount: Number(m[1]) };
-    m = /^\+(\d+)$/.exec(s);
-    if (m) return { kind: "heal", amount: Number(m[1]) };
-    m = /^-?(\d+)$/.exec(s);
-    if (m) return { kind: "damage", amount: Number(m[1]) };
-    return null;
-  }
-  function applyHp(state2, op) {
-    switch (op.kind) {
-      case "damage":
-        return { ...state2, hp: state2.hp - op.amount };
-      case "heal":
-        return { ...state2, hp: Math.min(state2.maxHp, Math.max(state2.hp, 0) + op.amount) };
-      case "set":
-        return { ...state2, hp: op.amount };
-      case "max": {
-        const taken = state2.maxHp - state2.hp;
-        const maxHp = Math.max(1, op.amount);
-        return { hp: maxHp - taken, maxHp };
-      }
+  // src/extension/assets.ts
+  function describeError(err) {
+    if (err instanceof Error) return err.message;
+    if (typeof err === "string") return err;
+    const message = err?.message ?? err?.error;
+    if (typeof message === "string") return message;
+    try {
+      return JSON.stringify(err) ?? String(err);
+    } catch {
+      return String(err);
     }
   }
-  function hpBand(state2) {
-    if (state2.hp <= 0) return "down";
-    if (state2.hp <= state2.maxHp / 2) return "bloodied";
-    return "healthy";
+  var plainText = (text) => text?.plainText ?? "";
+  function toArt(d) {
+    return {
+      name: d.name,
+      image: { url: d.image.url, mime: d.image.mime, width: d.image.width, height: d.image.height },
+      grid: { dpi: d.grid.dpi, offset: { x: d.grid.offset.x, y: d.grid.offset.y } },
+      scale: { x: d.scale.x, y: d.scale.y },
+      rotation: d.rotation,
+      text: d.text,
+      textItemType: d.textItemType,
+      description: d.description
+    };
+  }
+  function artFromItem(item) {
+    return toArt({ ...item, type: "CHARACTER" });
+  }
+  async function pickImages(search, multiple = true) {
+    const attempts = [
+      () => lib_default.assets.downloadImages(multiple, search || void 0, "CHARACTER"),
+      () => lib_default.assets.downloadImages(multiple),
+      () => lib_default.assets.downloadImages()
+    ];
+    let error = "";
+    for (const attempt of attempts) {
+      try {
+        return { picks: await attempt() ?? [] };
+      } catch (err) {
+        error = describeError(err);
+        console.warn("[obsidian-bestiary] asset picker failed:", err);
+      }
+    }
+    return { picks: [], error };
+  }
+  async function tokenSize(art) {
+    const dpi = await lib_default.scene.grid.getDpi();
+    return art.image.width / art.grid.dpi * dpi * Math.abs(art.scale.x);
+  }
+  async function viewCentre() {
+    const [w, h] = await Promise.all([lib_default.viewport.getWidth(), lib_default.viewport.getHeight()]);
+    return lib_default.viewport.inverseTransformPoint({ x: w / 2, y: h / 2 });
+  }
+  function buildToken(art, position, metadata, visible = true) {
+    let b = buildImage(art.image, art.grid).name(art.name).scale(art.scale).rotation(art.rotation).layer("CHARACTER").position(position).visible(visible).metadata(metadata);
+    if (art.text) b = b.text(art.text);
+    if (art.textItemType) b = b.textItemType(art.textItemType);
+    if (art.description) b = b.description(art.description);
+    return b.build();
   }
 
   // src/shared/turns.ts
@@ -3850,6 +3896,12 @@
   var pcId = (name) => `p:${matchKey(name)}`;
   function monsterName(creature, n, siblings) {
     return siblings > 1 && n ? `${creature} ${n}` : creature;
+  }
+  function nextNumbers(used, count) {
+    const taken = new Set(used);
+    const out = [];
+    for (let n = 1; out.length < count; n++) if (!taken.has(n)) out.push(n);
+    return out;
   }
   function buildEntries(monsters, pcTokens, state2) {
     const byId = /* @__PURE__ */ new Map();
@@ -3988,8 +4040,31 @@
     }
     return { monsters, pcs };
   }
+  function usedNumbers(items2, creature, except = /* @__PURE__ */ new Set()) {
+    const out = [];
+    for (const item of items2) {
+      if (except.has(item.id)) continue;
+      const c = readCreature(item.metadata);
+      if (c && c.name === creature && c.n) out.push(c.n);
+    }
+    return out;
+  }
+  function creatureFromEntry(entry) {
+    const max = entry.hp ?? 1;
+    return { name: entry.name, hp: max, maxHp: max, ac: entry.ac, init: entry.init };
+  }
+  var INDEX_KEY = "obsidian-bestiary:index";
   var PORT_KEY = "obsidian-bestiary:port";
   var PARTIES_KEY = "obsidian-bestiary:parties";
+  var ENCOUNTERS_KEY = "obsidian-bestiary:encounters";
+  function loadEncounters() {
+    try {
+      const raw = localStorage.getItem(ENCOUNTERS_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
   var LAST_PARTY_KEY = "obsidian-bestiary:last-party";
   function loadParties() {
     try {
@@ -4013,6 +4088,14 @@
     } catch {
     }
   }
+  function loadIndex() {
+    try {
+      const raw = localStorage.getItem(INDEX_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
   function getPort() {
     try {
       const p = Number(localStorage.getItem(PORT_KEY));
@@ -4034,6 +4117,145 @@
       post: (msg) => channel2.postMessage(msg),
       close: () => channel2.close()
     };
+  }
+
+  // src/extension/insert.ts
+  async function insertCreatures(specs, opts) {
+    const result = { placed: [], skipped: [], ids: [] };
+    const items2 = await lib_default.scene.items.getItems();
+    const art = { ...opts.art };
+    const learned = {};
+    const rows = specs.filter((s) => s.count > 0).map((s) => {
+      const entry = opts.search?.find(s.name) ?? null;
+      return { spec: s, entry, key: entry?.name ?? s.name };
+    });
+    for (const item of items2) {
+      const c = readCreature(item.metadata);
+      if (c && !art[c.name] && isImage(item) && item.image?.url) learned[c.name] = art[c.name] = artFromItem(item);
+    }
+    for (const { key } of rows) {
+      if (art[key] || result.pickerError !== void 0) continue;
+      const { picks, error } = await pickImages(key, false);
+      if (error) result.pickerError = error;
+      else if (picks[0]) {
+        learned[key] = art[key] = toArt(picks[0]);
+      }
+    }
+    if (Object.keys(learned).length) opts.saveArt(learned);
+    const placeable = rows.filter((r) => art[r.key]);
+    result.skipped = rows.filter((r) => !art[r.key]).map((r) => r.key);
+    if (!placeable.length) return result;
+    const dpi = await lib_default.scene.grid.getDpi();
+    const centre = await viewCentre();
+    const sizes = await Promise.all(placeable.map((r) => tokenSize(art[r.key])));
+    const rowHeights = sizes.map((s) => Math.max(dpi, s));
+    const total = rowHeights.reduce((a, b) => a + b, 0);
+    let y = centre.y - total / 2;
+    const tokens = [];
+    for (const [i, { spec, entry, key }] of placeable.entries()) {
+      const spacing = rowHeights[i];
+      const rowY = y + spacing / 2;
+      y += spacing;
+      const numbers = entry ? nextNumbers(usedNumbers(items2, entry.name), spec.count) : [];
+      for (let k = 0; k < spec.count; k++) {
+        const x = centre.x + (k - (spec.count - 1) / 2) * spacing;
+        const position = await lib_default.scene.grid.snapPosition({ x, y: rowY });
+        let metadata = {};
+        if (entry) {
+          const base = creatureFromEntry(entry);
+          const maxHp = spec.hp ?? base.maxHp;
+          const creature = {
+            ...base,
+            hp: maxHp,
+            maxHp,
+            ac: spec.ac ?? base.ac,
+            init: spec.mod ?? base.init,
+            n: numbers[k]
+          };
+          metadata = { [TOKEN_KEY]: creature };
+        }
+        tokens.push(buildToken(art[key], position, metadata, !opts.hidden));
+      }
+      result.placed.push({ name: key, count: spec.count, linked: !!entry });
+    }
+    await lib_default.scene.items.addItems(tokens);
+    result.ids = tokens.map((t) => t.id);
+    return result;
+  }
+  function describeInsert(r, hidden) {
+    const parts = [];
+    const linked = r.placed.filter((p) => p.linked);
+    const unlinked = r.placed.filter((p) => !p.linked);
+    const list = (ps) => ps.map((p) => p.count > 1 ? `${p.name} \xD7${p.count}` : p.name).join(", ");
+    if (linked.length) parts.push(`Added ${list(linked)}${hidden ? " (hidden)" : ""}`);
+    if (unlinked.length) parts.push(`${list(unlinked)} placed unlinked (not in your bestiary)`);
+    if (r.pickerError) parts.push(`Owlbear's token picker didn't open (${r.pickerError}); drag one ${r.skipped.join(", ")} onto the map and try again`);
+    else if (r.skipped.length) parts.push(`no token picked for ${r.skipped.join(", ")}`);
+    return parts.length ? `${parts.join("; ")}.` : "Nothing to add.";
+  }
+
+  // src/shared/party.ts
+  function matchPicks(picks, members) {
+    const matched = /* @__PURE__ */ new Map();
+    const used = /* @__PURE__ */ new Set();
+    const keysOf = (p) => [p.name, p.label ?? ""].map(matchKey).filter(Boolean);
+    for (const member of members) {
+      const key = matchKey(member);
+      const i = picks.findIndex((p, idx) => !used.has(idx) && keysOf(p).includes(key));
+      if (i !== -1) {
+        matched.set(member, i);
+        used.add(i);
+      }
+    }
+    for (const member of members) {
+      if (matched.has(member)) continue;
+      const key = matchKey(member);
+      const candidates = picks.map((p, idx) => ({ idx, keys: keysOf(p) })).filter(({ idx, keys }) => !used.has(idx) && keys.some((k) => k.startsWith(key) || key.startsWith(k)));
+      if (candidates.length === 1) {
+        matched.set(member, candidates[0].idx);
+        used.add(candidates[0].idx);
+      }
+    }
+    const unmatched = picks.map((_, i) => i).filter((i) => !used.has(i));
+    return { matched, unmatched };
+  }
+  function rowPositions(center, count, spacing) {
+    return Array.from({ length: count }, (_, i) => ({ x: center.x + (i - (count - 1) / 2) * spacing, y: center.y }));
+  }
+
+  // src/shared/hp.ts
+  function parseHpInput(input) {
+    const s = input.trim().toLowerCase().replace(/\s+/g, "");
+    if (!s) return null;
+    let m = /^(?:max|m)=?(\d+)$/.exec(s);
+    if (m) return { kind: "max", amount: Number(m[1]) };
+    m = /^=(-?\d+)$/.exec(s);
+    if (m) return { kind: "set", amount: Number(m[1]) };
+    m = /^\+(\d+)$/.exec(s);
+    if (m) return { kind: "heal", amount: Number(m[1]) };
+    m = /^-?(\d+)$/.exec(s);
+    if (m) return { kind: "damage", amount: Number(m[1]) };
+    return null;
+  }
+  function applyHp(state2, op) {
+    switch (op.kind) {
+      case "damage":
+        return { ...state2, hp: state2.hp - op.amount };
+      case "heal":
+        return { ...state2, hp: Math.min(state2.maxHp, Math.max(state2.hp, 0) + op.amount) };
+      case "set":
+        return { ...state2, hp: op.amount };
+      case "max": {
+        const taken = state2.maxHp - state2.hp;
+        const maxHp = Math.max(1, op.amount);
+        return { hp: maxHp - taken, maxHp };
+      }
+    }
+  }
+  function hpBand(state2) {
+    if (state2.hp <= 0) return "down";
+    if (state2.hp <= state2.maxHp / 2) return "bloodied";
+    return "healthy";
   }
 
   // src/extension/theme.ts
@@ -4068,6 +4290,10 @@
   var editingHp = null;
   var partyNotice = "";
   var inserting = false;
+  var encounters = loadEncounters();
+  var encounterId = null;
+  var encounterNotice = "";
+  var insertingEncounter = false;
   var hpError = "";
   var esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
   var ICON = {
@@ -4078,6 +4304,10 @@
   var channel = openChannel((msg) => {
     if (msg.type === "status") {
       status = msg.status;
+      render();
+    } else if (msg.type === "encounters") {
+      encounters = msg.payload;
+      if (msg.error) encounterNotice = msg.error;
       render();
     } else if (msg.type === "parties") {
       parties = msg.parties;
@@ -4115,50 +4345,6 @@
     const party = findParty(partyName);
     setLastParty(party ? party.name : null);
     await save({ party: party?.name ?? null, members: party?.members ?? [] });
-  }
-  var plainText = (text) => text?.plainText ?? "";
-  function describeError(err) {
-    if (err instanceof Error) return err.message;
-    if (typeof err === "string") return err;
-    const message = err?.message ?? err?.error;
-    if (typeof message === "string") return message;
-    try {
-      return JSON.stringify(err) ?? String(err);
-    } catch {
-      return String(err);
-    }
-  }
-  function artFromItem(item) {
-    return toArt({ ...item, type: "CHARACTER" });
-  }
-  async function pickImages(search) {
-    const attempts = [
-      () => lib_default.assets.downloadImages(true, search || void 0, "CHARACTER"),
-      () => lib_default.assets.downloadImages(true),
-      () => lib_default.assets.downloadImages()
-    ];
-    let error = "";
-    for (const attempt of attempts) {
-      try {
-        return { picks: await attempt() ?? [] };
-      } catch (err) {
-        error = describeError(err);
-        console.warn("[obsidian-bestiary] asset picker failed:", err);
-      }
-    }
-    return { picks: [], error };
-  }
-  function toArt(d) {
-    return {
-      name: d.name,
-      image: { url: d.image.url, mime: d.image.mime, width: d.image.width, height: d.image.height },
-      grid: { dpi: d.grid.dpi, offset: { x: d.grid.offset.x, y: d.grid.offset.y } },
-      scale: { x: d.scale.x, y: d.scale.y },
-      rotation: d.rotation,
-      text: d.text,
-      textItemType: d.textItemType,
-      description: d.description
-    };
   }
   async function insertParty(repick) {
     const members = state.members;
@@ -4225,16 +4411,9 @@
         const dpi = await lib_default.scene.grid.getDpi();
         const size = (a) => a.image.width / a.grid.dpi * dpi * Math.abs(a.scale.x);
         const spacing = Math.max(dpi, ...placing.map((p) => size(p.art)));
-        const [w, h] = await Promise.all([lib_default.viewport.getWidth(), lib_default.viewport.getHeight()]);
-        const center = await lib_default.viewport.inverseTransformPoint({ x: w / 2, y: h / 2 });
+        const center = await viewCentre();
         const spots = await Promise.all(rowPositions(center, placing.length, spacing).map((p) => lib_default.scene.grid.snapPosition(p)));
-        const tokens = placing.map(({ pc, art: a }, i) => {
-          let b = buildImage(a.image, a.grid).name(a.name).scale(a.scale).rotation(a.rotation).layer("CHARACTER").position(spots[i]).metadata(pc ? { [PC_KEY]: { name: pc } } : {});
-          if (a.text) b = b.text(a.text);
-          if (a.textItemType) b = b.textItemType(a.textItemType);
-          if (a.description) b = b.description(a.description);
-          return b.build();
-        });
+        const tokens = placing.map(({ pc, art: a }, i) => buildToken(a, spots[i], pc ? { [PC_KEY]: { name: pc } } : {}));
         await lib_default.scene.items.addItems(tokens);
       }
       const parts = [];
@@ -4255,6 +4434,56 @@
       inserting = false;
       render();
     }
+  }
+  function currentEncounter() {
+    const list = encounters?.encounters ?? [];
+    return list.find((e) => e.id === encounterId) ?? list[0];
+  }
+  async function insertEncounter() {
+    const encounter = currentEncounter();
+    if (!encounter || insertingEncounter) return;
+    insertingEncounter = true;
+    encounterNotice = "";
+    render();
+    try {
+      const index = loadIndex();
+      const result = await insertCreatures(encounter.creatures, {
+        search: index ? new BestiarySearch(index.creatures) : null,
+        art: encounters?.art ?? {},
+        saveArt: (art) => channel.post({ type: "save-creature-art", art }),
+        hidden: true
+      });
+      encounterNotice = describeInsert(result, true);
+      if (result.placed.length) encounterNotice += " Reveal each token when it joins the fight.";
+      if (encounter.party && findParty(encounter.party) && state.party !== encounter.party) await choose(encounter.party);
+    } catch (err) {
+      encounterNotice = `Couldn't insert the encounter: ${describeError(err)}`;
+    } finally {
+      insertingEncounter = false;
+      render();
+    }
+  }
+  function encounterHtml() {
+    if (status?.state === "connected" && (status.protocol ?? 1) < 4) {
+      return `<div class="section">Encounters</div>
+      <p class="help">Update Owlbear Bestiary Bridge in Obsidian (with BRAT) to send encounters here.</p>`;
+    }
+    const list = encounters?.encounters ?? [];
+    if (!list.length) {
+      return `<div class="section">Encounters</div>
+      <p class="help">Send encounters from Obsidian with the <b>Send to Owlbear</b> button on an encounter block.</p>
+      ${encounterNotice ? `<div class="notice">${esc(encounterNotice)}</div>` : ""}`;
+    }
+    const current2 = currentEncounter();
+    const needArt = current2.creatures.filter((c) => !encounters?.art[c.name]).map((c) => c.name);
+    return `<div class="section">Encounters</div>
+    <div class="bar">
+      <select id="encounter" aria-label="Encounter">${list.map((e) => `<option value="${esc(e.id)}" ${e.id === current2.id ? "selected" : ""}>${esc(e.name)}</option>`).join("")}</select>
+      <button id="insert-encounter" type="button" ${insertingEncounter ? "disabled" : ""} title="Put these monsters on the map, hidden">Insert</button>
+      <button id="remove-encounter" class="icon" type="button" title="Remove from the list">\u2715</button>
+    </div>
+    <div class="help enc-summary">${esc(summarize(current2.creatures))}${current2.from ? ` \xB7 ${esc(current2.from)}` : ""}${needArt.length ? `<br>First time: you'll pick a token for ${esc(needArt.join(", "))}` : ""}</div>
+    ${encounterNotice ? `<div class="notice">${esc(encounterNotice)}</div>` : ""}`;
   }
   async function selectTokens(entry) {
     const ids = entry?.tokens.map((t) => t.id) ?? [];
@@ -4355,11 +4584,10 @@
   }
   function partyOptions() {
     const list = parties?.parties ?? [];
-    const group = (label, src) => {
-      const opts = list.filter((p) => p.source === src);
-      return opts.length ? `<optgroup label="${label}">${opts.map((p) => `<option value="${esc(p.name)}" ${p.name === state.party ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</optgroup>` : "";
-    };
-    return `<option value="" ${state.party ? "" : "selected"}>No party</option>${group("Initiative Tracker", "initiative-tracker")}${group("Made in Owlbear", "bridge")}`;
+    const opt = (p) => `<option value="${esc(p.name)}" ${p.name === state.party ? "selected" : ""}>${esc(p.name)}</option>`;
+    const tracker = list.filter((p) => p.source === "initiative-tracker");
+    const own = list.filter((p) => p.source !== "initiative-tracker");
+    return `<option value="" ${state.party ? "" : "selected"}>No party</option>` + (tracker.length ? `<optgroup label="Initiative Tracker">${tracker.map(opt).join("")}</optgroup>` : "") + own.map(opt).join("");
   }
   function rowHtml(e) {
     const cls = [e.kind, e.id === state.turn && state.round > 0 ? "active" : "", e.held ? "held" : "", e.down ? "down" : ""].filter(Boolean).join(" ");
@@ -4384,7 +4612,7 @@
     <div class="bar">
       <select id="party" aria-label="Party">${partyOptions()}</select>
       <button id="new-party" type="button" title="New party">New</button>
-      ${party?.source === "bridge" ? `<button id="edit-party" type="button" title="Edit party">Edit</button>` : ""}
+      ${party && party.source !== "initiative-tracker" ? `<button id="edit-party" type="button" title="Edit party">Edit</button>` : ""}
     </div>
     ${formOpen ? partyFormHtml() : ""}
     ${state.members.length ? `<div class="bar">
@@ -4392,6 +4620,8 @@
       <button id="repick" type="button" title="Choose the party's token images again">Re-pick tokens</button>
     </div>` : ""}
     ${partyNotice ? `<div class="notice">${esc(partyNotice)}</div>` : ""}
+    ${encounterHtml()}
+    <div class="section">Initiative</div>
     <div class="bar">
       <button id="roll" type="button" title="Roll for monsters without a number">Roll</button>
       ${started ? `<button id="prev" type="button" title="Previous turn">\u25C0</button>` : ""}
@@ -4434,6 +4664,19 @@
     const on = (id, fn) => document.getElementById(id)?.addEventListener("click", fn);
     document.getElementById("party")?.addEventListener("change", (e) => void choose(e.target.value));
     on("insert-party", () => void insertParty(false));
+    on("insert-encounter", () => void insertEncounter());
+    on("remove-encounter", () => {
+      const e = currentEncounter();
+      if (!e) return;
+      encounterNotice = `Removed \u201C${e.name}\u201D from the list.`;
+      encounterId = null;
+      channel.post({ type: "remove-encounter", id: e.id });
+    });
+    document.getElementById("encounter")?.addEventListener("change", (e) => {
+      encounterId = e.target.value;
+      encounterNotice = "";
+      render();
+    });
     on("repick", () => void insertParty(true));
     on("new-party", () => {
       formOpen = { editing: null };
@@ -4570,6 +4813,7 @@
       });
       channel.post({ type: "get-status" });
       channel.post({ type: "get-parties" });
+      channel.post({ type: "get-encounters" });
     }
     lib_default.player.onChange((p) => {
       if (p.role !== role) {

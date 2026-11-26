@@ -3,9 +3,10 @@
 // on 127.0.0.1. Bump PROTOCOL_VERSION on any incompatible change.
 
 import type { BestiaryEntry } from "./bestiary";
+import type { StagedEncounter } from "./encounter";
 
-export const PROTOCOL_VERSION = 3;
-/** Oldest plugin protocol the extension still works with (parties need 2, saved party tokens 3). */
+export const PROTOCOL_VERSION = 4;
+/** Oldest plugin protocol the extension still works with (parties need 2, saved party tokens 3, encounters 4). */
 export const MIN_PROTOCOL_VERSION = 1;
 export const DEFAULT_PORT = 27190;
 
@@ -22,8 +23,13 @@ export type Request =
   | { kind: "saveParty"; name: string; members: string[] }
   | { kind: "deleteParty"; name: string }
   /** Remember (or with null, forget) which Owlbear image is each PC's token. */
-  | { kind: "saveTokenArt"; art: Record<string, TokenArt | null> };
+  | { kind: "saveTokenArt"; art: Record<string, TokenArt | null> }
+  | { kind: "getEncounters" }
+  | { kind: "removeEncounter"; encounterId: string }
+  /** Remember (or with null, forget) which Owlbear image is each creature's token. */
+  | { kind: "saveCreatureArt"; art: Record<string, TokenArt | null> };
 
+/** `id` matches the reply to the request, so request fields must never be called `id`. */
 export type RequestEnvelope = { id: number } & Request;
 
 // ------------------------------------------------------------ responses (plugin -> extension)
@@ -76,6 +82,13 @@ export interface PartiesPayload {
   art?: Record<string, TokenArt>;
 }
 
+export interface EncountersPayload {
+  /** Encounters sent from Obsidian (or imported), newest first. */
+  encounters: StagedEncounter[];
+  /** Saved token images by creature name. */
+  art: Record<string, TokenArt>;
+}
+
 export type ResponseFor<R extends Request> = R extends { kind: "hello" }
   ? Welcome
   : R extends { kind: "getBestiary" }
@@ -84,7 +97,9 @@ export type ResponseFor<R extends Request> = R extends { kind: "hello" }
       ? ShowResult
       : R extends { kind: "getParties" | "saveParty" | "deleteParty" | "saveTokenArt" }
         ? PartiesPayload
-        : never;
+        : R extends { kind: "getEncounters" | "removeEncounter" | "saveCreatureArt" }
+          ? EncountersPayload
+          : never;
 
 export type ResponseEnvelope =
   | { id: number; ok: true; result: unknown }
@@ -94,4 +109,7 @@ export type ResponseEnvelope =
 
 export type Push =
   | { push: "bestiaryChanged"; version: string; creatureCount: number }
-  | { push: "partiesChanged" };
+  | { push: "partiesChanged" }
+  | { push: "encountersChanged" }
+  /** "Add to Owlbear" from a statblock: put one hidden, linked token of this creature on the map. */
+  | { push: "addCreature"; name: string };

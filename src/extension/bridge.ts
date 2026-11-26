@@ -61,7 +61,7 @@ export class BridgeClient {
       return Promise.reject(new Error("not connected to Obsidian"));
     }
     const id = this.nextId++;
-    this.ws.send(JSON.stringify({ id, ...req }));
+    this.ws.send(JSON.stringify({ ...req, id }));
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);
