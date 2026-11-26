@@ -2,8 +2,12 @@
 // GM: turn order (party, rolls, Start / Next / Previous, hold, click to select, HP) + connection details.
 // Players: the turn order only (names and whose turn it is, never HP).
 
-import OBR, { buildImage, isImage, type Image, type ImageDownload, type Item, type TextContent } from "@owlbear-rodeo/sdk";
-import type { Party, PartiesPayload, TokenArt } from "../shared/protocol";
+import OBR, { isImage, type Item } from "@owlbear-rodeo/sdk";
+import type { EncountersPayload, Party, PartiesPayload, TokenArt } from "../shared/protocol";
+import { summarize, type StagedEncounter } from "../shared/encounter";
+import { BestiarySearch } from "../shared/search";
+import { artFromItem, buildToken, describeError, pickImages, plainText, toArt, viewCentre } from "./assets";
+import { describeInsert, insertCreatures } from "./insert";
 import { matchKey, nameCandidates } from "../shared/names";
 import { matchPicks, rowPositions } from "../shared/party";
 import { applyHp, hpBand, parseHpInput } from "../shared/hp";
@@ -25,6 +29,8 @@ import {
   combatTokens,
   getLastParty,
   getPort,
+  loadEncounters,
+  loadIndex,
   loadParties,
   openChannel,
   readCombat,
@@ -53,6 +59,10 @@ let lastPartyApplied = false;
 let editingHp: string | null = null;
 let partyNotice = "";
 let inserting = false;
+let encounters: EncountersPayload | null = loadEncounters();
+let encounterId: string | null = null;
+let encounterNotice = "";
+let insertingEncounter = false;
 let hpError = "";
 
 const esc = (s: string) =>
@@ -69,6 +79,10 @@ const ICON = {
 const channel = openChannel((msg: ChannelMessage) => {
   if (msg.type === "status") {
     status = msg.status;
+    render();
+  } else if (msg.type === "encounters") {
+    encounters = msg.payload;
+    if (msg.error) encounterNotice = msg.error;
     render();
   } else if (msg.type === "parties") {
     parties = msg.parties;
@@ -117,61 +131,6 @@ async function choose(partyName: string) {
 }
 
 // ------------------------------------------------------------ insert party
-
-const plainText = (text: unknown) => (text as { plainText?: string } | undefined)?.plainText ?? "";
-
-/** Owlbear rejects some calls with plain objects or strings rather than Errors. */
-function describeError(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (typeof err === "string") return err;
-  const message = (err as { message?: unknown; error?: unknown } | null)?.message ?? (err as { error?: unknown } | null)?.error;
-  if (typeof message === "string") return message;
-  try {
-    return JSON.stringify(err) ?? String(err);
-  } catch {
-    return String(err);
-  }
-}
-
-/** A token already on the map, as saved art (so the next insert can recreate it). */
-function artFromItem(item: Image): TokenArt {
-  return toArt({ ...item, type: "CHARACTER" } as unknown as ImageDownload);
-}
-
-/**
- * Open Owlbear's asset picker. Tries the full request first, then plainer ones in case this
- * Owlbear version rejects the search text or type hint. Returns the error text if all fail.
- */
-async function pickImages(search: string): Promise<{ picks: ImageDownload[]; error?: string }> {
-  const attempts: (() => Promise<ImageDownload[]>)[] = [
-    () => OBR.assets.downloadImages(true, search || undefined, "CHARACTER"),
-    () => OBR.assets.downloadImages(true),
-    () => OBR.assets.downloadImages(),
-  ];
-  let error = "";
-  for (const attempt of attempts) {
-    try {
-      return { picks: (await attempt()) ?? [] };
-    } catch (err) {
-      error = describeError(err);
-      console.warn("[obsidian-bestiary] asset picker failed:", err);
-    }
-  }
-  return { picks: [], error };
-}
-
-function toArt(d: ImageDownload): TokenArt {
-  return {
-    name: d.name,
-    image: { url: d.image.url, mime: d.image.mime, width: d.image.width, height: d.image.height },
-    grid: { dpi: d.grid.dpi, offset: { x: d.grid.offset.x, y: d.grid.offset.y } },
-    scale: { x: d.scale.x, y: d.scale.y },
-    rotation: d.rotation,
-    text: d.text,
-    textItemType: d.textItemType,
-    description: d.description,
-  };
-}
 
 /**
  * Put the chosen party's PCs on the map, linked. PCs already on the map are skipped (and
@@ -248,22 +207,9 @@ async function insertParty(repick: boolean) {
       const dpi = await OBR.scene.grid.getDpi();
       const size = (a: TokenArt) => (a.image.width / a.grid.dpi) * dpi * Math.abs(a.scale.x);
       const spacing = Math.max(dpi, ...placing.map((p) => size(p.art)));
-      const [w, h] = await Promise.all([OBR.viewport.getWidth(), OBR.viewport.getHeight()]);
-      const center = await OBR.viewport.inverseTransformPoint({ x: w / 2, y: h / 2 });
+      const center = await viewCentre();
       const spots = await Promise.all(rowPositions(center, placing.length, spacing).map((p) => OBR.scene.grid.snapPosition(p)));
-      const tokens = placing.map(({ pc, art: a }, i) => {
-        let b = buildImage(a.image, a.grid)
-          .name(a.name)
-          .scale(a.scale)
-          .rotation(a.rotation)
-          .layer("CHARACTER")
-          .position(spots[i])
-          .metadata(pc ? { [PC_KEY]: { name: pc } } : {});
-        if (a.text) b = b.text(a.text as TextContent);
-        if (a.textItemType) b = b.textItemType(a.textItemType as "LABEL" | "TEXT");
-        if (a.description) b = b.description(a.description);
-        return b.build();
-      });
+      const tokens = placing.map(({ pc, art: a }, i) => buildToken(a, spots[i], pc ? { [PC_KEY]: { name: pc } } : {}));
       await OBR.scene.items.addItems(tokens);
     }
 
@@ -286,6 +232,66 @@ async function insertParty(repick: boolean) {
     inserting = false;
     render();
   }
+}
+
+// ------------------------------------------------------------ encounters
+
+function currentEncounter(): StagedEncounter | undefined {
+  const list = encounters?.encounters ?? [];
+  return list.find((e) => e.id === encounterId) ?? list[0];
+}
+
+/** Put the chosen encounter's monsters on the map: hidden, linked, numbered. */
+async function insertEncounter() {
+  const encounter = currentEncounter();
+  if (!encounter || insertingEncounter) return;
+  insertingEncounter = true;
+  encounterNotice = "";
+  render();
+  try {
+    const index = loadIndex();
+    const result = await insertCreatures(encounter.creatures, {
+      search: index ? new BestiarySearch(index.creatures) : null,
+      art: encounters?.art ?? {},
+      saveArt: (art) => channel.post({ type: "save-creature-art", art }),
+      hidden: true,
+    });
+    encounterNotice = describeInsert(result, true);
+    if (result.placed.length) encounterNotice += " Reveal each token when it joins the fight.";
+    if (encounter.party && findParty(encounter.party) && state.party !== encounter.party) await choose(encounter.party);
+  } catch (err) {
+    encounterNotice = `Couldn't insert the encounter: ${describeError(err)}`;
+  } finally {
+    insertingEncounter = false;
+    render();
+  }
+}
+
+function encounterHtml(): string {
+  if (status?.state === "connected" && (status.protocol ?? 1) < 4) {
+    return `<div class="section">Encounters</div>
+      <p class="help">Update Owlbear Bestiary Bridge in Obsidian (with BRAT) to send encounters here.</p>`;
+  }
+  const list = encounters?.encounters ?? [];
+  if (!list.length) {
+    return `<div class="section">Encounters</div>
+      <p class="help">Send encounters from Obsidian with the <b>Send to Owlbear</b> button on an encounter block.</p>
+      ${encounterNotice ? `<div class="notice">${esc(encounterNotice)}</div>` : ""}`;
+  }
+  const current = currentEncounter()!;
+  const needArt = current.creatures.filter((c) => !encounters?.art[c.name]).map((c) => c.name);
+  return `<div class="section">Encounters</div>
+    <div class="bar">
+      <select id="encounter" aria-label="Encounter">${list
+        .map((e) => `<option value="${esc(e.id)}" ${e.id === current.id ? "selected" : ""}>${esc(e.name)}</option>`)
+        .join("")}</select>
+      <button id="insert-encounter" type="button" ${insertingEncounter ? "disabled" : ""} title="Put these monsters on the map, hidden">Insert</button>
+      <button id="remove-encounter" class="icon" type="button" title="Remove from the list">✕</button>
+    </div>
+    <div class="help enc-summary">${esc(summarize(current.creatures))}${current.from ? ` · ${esc(current.from)}` : ""}${
+      needArt.length ? `<br>First time: you'll pick a token for ${esc(needArt.join(", "))}` : ""
+    }</div>
+    ${encounterNotice ? `<div class="notice">${esc(encounterNotice)}</div>` : ""}`;
 }
 
 async function selectTokens(entry: Entry | undefined) {
@@ -416,15 +422,15 @@ function connDot(): string {
 
 function partyOptions(): string {
   const list = parties?.parties ?? [];
-  const group = (label: string, src: Party["source"]) => {
-    const opts = list.filter((p) => p.source === src);
-    return opts.length
-      ? `<optgroup label="${label}">${opts
-          .map((p) => `<option value="${esc(p.name)}" ${p.name === state.party ? "selected" : ""}>${esc(p.name)}</option>`)
-          .join("")}</optgroup>`
-      : "";
-  };
-  return `<option value="" ${state.party ? "" : "selected"}>No party</option>${group("Initiative Tracker", "initiative-tracker")}${group("Made in Owlbear", "bridge")}`;
+  // Older plugins listed Initiative Tracker's parties separately (read-only).
+  const opt = (p: Party) => `<option value="${esc(p.name)}" ${p.name === state.party ? "selected" : ""}>${esc(p.name)}</option>`;
+  const tracker = list.filter((p) => p.source === "initiative-tracker");
+  const own = list.filter((p) => p.source !== "initiative-tracker");
+  return (
+    `<option value="" ${state.party ? "" : "selected"}>No party</option>` +
+    (tracker.length ? `<optgroup label="Initiative Tracker">${tracker.map(opt).join("")}</optgroup>` : "") +
+    own.map(opt).join("")
+  );
 }
 
 function rowHtml(e: Entry): string {
@@ -466,7 +472,7 @@ function gmHtml(): string {
     <div class="bar">
       <select id="party" aria-label="Party">${partyOptions()}</select>
       <button id="new-party" type="button" title="New party">New</button>
-      ${party?.source === "bridge" ? `<button id="edit-party" type="button" title="Edit party">Edit</button>` : ""}
+      ${party && party.source !== "initiative-tracker" ? `<button id="edit-party" type="button" title="Edit party">Edit</button>` : ""}
     </div>
     ${formOpen ? partyFormHtml() : ""}
     ${
@@ -478,6 +484,8 @@ function gmHtml(): string {
         : ""
     }
     ${partyNotice ? `<div class="notice">${esc(partyNotice)}</div>` : ""}
+    ${encounterHtml()}
+    <div class="section">Initiative</div>
     <div class="bar">
       <button id="roll" type="button" title="Roll for monsters without a number">Roll</button>
       ${started ? `<button id="prev" type="button" title="Previous turn">◀</button>` : ""}
@@ -542,6 +550,19 @@ function wireGm() {
 
   document.getElementById("party")?.addEventListener("change", (e) => void choose((e.target as HTMLSelectElement).value));
   on("insert-party", () => void insertParty(false));
+  on("insert-encounter", () => void insertEncounter());
+  on("remove-encounter", () => {
+    const e = currentEncounter();
+    if (!e) return;
+    encounterNotice = `Removed “${e.name}” from the list.`;
+    encounterId = null;
+    channel.post({ type: "remove-encounter", id: e.id });
+  });
+  document.getElementById("encounter")?.addEventListener("change", (e) => {
+    encounterId = (e.target as HTMLSelectElement).value;
+    encounterNotice = "";
+    render();
+  });
   on("repick", () => void insertParty(true));
   on("new-party", () => {
     formOpen = { editing: null };
@@ -688,6 +709,7 @@ OBR.onReady(async () => {
     });
     channel.post({ type: "get-status" });
     channel.post({ type: "get-parties" });
+    channel.post({ type: "get-encounters" });
   }
   OBR.player.onChange((p) => {
     if (p.role !== role) {

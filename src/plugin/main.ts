@@ -1,22 +1,31 @@
 // Owlbear Bestiary Bridge: lets the "Obsidian Bestiary" Owlbear Rodeo extension
 // search your Fantasy Statblocks bestiary and open creatures in the Creature pane.
+// It also owns the campaign's combat data (players, parties, encounters, token
+// images) and the `encounter` code block, so Initiative Tracker isn't needed.
 
 import { App, Notice, Plugin, PluginSettingTab, Setting, debounce } from "obsidian";
 import { startBridgeServer, type BridgeServer } from "./server";
+import { registerEncounters } from "./encounters";
 import {
   DEFAULT_PORT,
   EXTENSION_ORIGINS,
   PROTOCOL_VERSION,
   type BestiaryPayload,
+  type EncountersPayload,
   type PartiesPayload,
-  type Party,
   type Push,
   type Request,
-  type TokenArt,
   type ShowResult,
+  type TokenArt,
   type Welcome,
 } from "../shared/protocol";
 import { indexVersion, toEntry, type BestiaryEntry } from "../shared/bestiary";
+import {
+  importInitiativeTracker,
+  type InitiativeTrackerData,
+  type Player,
+  type StagedEncounter,
+} from "../shared/encounter";
 import { matchKey } from "../shared/names";
 
 interface StatblocksApi {
@@ -34,28 +43,41 @@ interface StatblocksPlugin {
 declare global {
   interface Window {
     FantasyStatblocks?: StatblocksApi;
+    /** For Fantasy Statblocks layout buttons: `OwlbearBridge.addToOwlbear(monster)`. */
+    OwlbearBridge?: { addToOwlbear(creature: { name?: string } | string): void };
   }
 }
 
 interface Settings {
   port: number;
   showOnSelect: boolean;
-  /** Parties made in Owlbear (Initiative Tracker's own parties are read, never written). */
+  players: Player[];
   parties: { name: string; members: string[] }[];
   /** Each PC's token image in the GM's Owlbear library, for "Insert party". */
   tokenArt: Record<string, TokenArt>;
+  /** Each creature's token image, for "Insert encounter" and "Add to Owlbear". */
+  creatureArt: Record<string, TokenArt>;
+  /** Encounters sent to Owlbear's list (or imported from Initiative Tracker). */
+  encounters: StagedEncounter[];
+  /** When Initiative Tracker's data was imported (0 = not yet). */
+  importedFromInitiativeTracker: number;
 }
 
-const DEFAULTS: Settings = { port: DEFAULT_PORT, showOnSelect: true, parties: [], tokenArt: {} };
+const freshSettings = (): Settings => ({
+  port: DEFAULT_PORT,
+  showOnSelect: true,
+  players: [],
+  parties: [],
+  tokenArt: {},
+  creatureArt: {},
+  encounters: [],
+  importedFromInitiativeTracker: 0,
+});
 
-/** The bits of Initiative Tracker's saved data we read. */
-interface InitiativeTrackerData {
-  parties?: { name: string; players?: string[] }[];
-  players?: { name: string; player?: boolean }[];
-}
+type Plugins = { getPlugin(id: string): unknown; enabledPlugins: Set<string> };
 
 export default class OwlbearBestiaryBridge extends Plugin {
-  settings: Settings = { ...DEFAULTS };
+  settings: Settings = freshSettings();
   private server: BridgeServer | null = null;
   private statusEl!: HTMLElement;
   private clients = 0;
@@ -63,9 +85,23 @@ export default class OwlbearBestiaryBridge extends Plugin {
   private index: BestiaryEntry[] = [];
   private version = "";
   private byKey = new Map<string, string>();
+  /** Whether this plugin draws `encounter` blocks (only when Initiative Tracker is off). */
+  encounterBlocks = false;
+
+  get plugins(): Plugins {
+    return (this.app as unknown as { plugins: Plugins }).plugins;
+  }
+
+  get initiativeTrackerEnabled(): boolean {
+    return this.plugins.enabledPlugins.has("initiative-tracker");
+  }
+
+  get connected(): boolean {
+    return this.clients > 0;
+  }
 
   async onload() {
-    this.settings = { ...DEFAULTS, parties: [], tokenArt: {}, ...((await this.loadData()) as Partial<Settings> | null) };
+    this.settings = { ...freshSettings(), ...((await this.loadData()) as Partial<Settings> | null) };
     this.statusEl = this.addStatusBarItem();
     this.addSettingTab(new BridgeSettingTab(this.app, this));
 
@@ -79,7 +115,19 @@ export default class OwlbearBestiaryBridge extends Plugin {
       this.registerEvent((this.app.workspace as unknown as WorkspaceEvents).on(event, rebuild));
     }
 
-    this.app.workspace.onLayoutReady(() => {
+    registerEncounters(this);
+
+    window.OwlbearBridge = { addToOwlbear: (creature) => this.addToOwlbear(creature) };
+    this.register(() => delete window.OwlbearBridge);
+
+    this.addCommand({
+      id: "import-initiative-tracker",
+      name: "Import players, parties and saved encounters from Initiative Tracker",
+      callback: () => void this.importFromInitiativeTracker(true),
+    });
+
+    this.app.workspace.onLayoutReady(async () => {
+      if (!this.settings.importedFromInitiativeTracker) await this.importFromInitiativeTracker(false);
       this.rebuildIndex(false);
       void this.startServer();
     });
@@ -121,6 +169,10 @@ export default class OwlbearBestiaryBridge extends Plugin {
       );
     }
     this.renderStatus();
+  }
+
+  push(msg: Push) {
+    this.server?.broadcast(msg);
   }
 
   private async handle(raw: Record<string, unknown>, reply: (msg: unknown) => void) {
@@ -166,7 +218,14 @@ export default class OwlbearBestiaryBridge extends Plugin {
       case "deleteParty":
         return this.deleteParty(req.name);
       case "saveTokenArt":
-        return this.saveTokenArt(req.art);
+        return this.saveArt("tokenArt", req.art);
+      case "getEncounters":
+        return this.encountersPayload();
+      case "removeEncounter":
+        await this.removeEncounter(req.encounterId);
+        return this.encountersPayload();
+      case "saveCreatureArt":
+        return this.saveArt("creatureArt", req.art);
       default:
         throw new Error(`unknown request "${(req as { kind?: string }).kind}"`);
     }
@@ -192,33 +251,122 @@ export default class OwlbearBestiaryBridge extends Plugin {
     this.version = version;
     this.byKey = new Map(entries.map((e) => [matchKey(e.name), e.name]));
     this.renderStatus();
-    if (notify) {
-      const push: Push = { push: "bestiaryChanged", version, creatureCount: entries.length };
-      this.server?.broadcast(push);
-    }
+    if (notify) this.push({ push: "bestiaryChanged", version, creatureCount: entries.length });
+  }
+
+  /** Exact bestiary name for a loosely written one ("kuo toa" -> "Kuo-Toa"). */
+  bestiaryName(name: string): string | null {
+    return this.byKey.get(matchKey(name)) ?? null;
   }
 
   /** Same as Fantasy Statblocks' own obsidian://creature-pane handler. */
   async showCreature(name: string): Promise<string | null> {
     const api = window.FantasyStatblocks;
-    const exact = this.byKey.get(matchKey(name));
+    const exact = this.bestiaryName(name);
     if (!api || !exact) return null;
     const creature = api.getBestiary?.().get(exact) ?? api.getCreatureFromBestiary(exact);
-    const fs = (this.app as unknown as { plugins: { getPlugin(id: string): unknown } }).plugins.getPlugin(
-      "obsidian-5e-statblocks",
-    ) as StatblocksPlugin | null;
+    const fs = this.plugins.getPlugin("obsidian-5e-statblocks") as StatblocksPlugin | null;
     if (fs?.creature_view) await fs.creature_view.render(creature);
     else if (fs?.openCreatureView) await (await fs.openCreatureView()).render(creature);
     else return null;
     return exact;
   }
 
-  // ------------------------------------------------------------ parties
+  // ------------------------------------------------------------ players and parties
 
-  /** Initiative Tracker's live data if it's loaded, else its saved data.json. */
+  parties(): PartiesPayload {
+    const pcs = new Set<string>([
+      ...this.settings.players.map((p) => p.name),
+      ...this.settings.parties.flatMap((p) => p.members),
+    ]);
+    return {
+      parties: this.settings.parties.map((p) => ({ ...p, source: "bridge" })),
+      pcs: [...pcs].sort((a, b) => a.localeCompare(b)),
+      art: this.settings.tokenArt,
+    };
+  }
+
+  private async saveParty(name: string, members: string[]): Promise<PartiesPayload> {
+    const clean = name.trim();
+    if (!clean) throw new Error("the party needs a name");
+    const list = [...new Set(members.map((m) => m.trim()).filter(Boolean))];
+    const existing = this.settings.parties.find((p) => p.name === clean);
+    if (existing) existing.members = list;
+    else this.settings.parties.push({ name: clean, members: list });
+    for (const member of list) {
+      if (!this.settings.players.some((p) => p.name === member)) this.settings.players.push({ name: member });
+    }
+    await this.saveSettings();
+    this.push({ push: "partiesChanged" });
+    return this.parties();
+  }
+
+  private async deleteParty(name: string): Promise<PartiesPayload> {
+    this.settings.parties = this.settings.parties.filter((p) => p.name !== name);
+    await this.saveSettings();
+    this.push({ push: "partiesChanged" });
+    return this.parties();
+  }
+
+  private async saveArt(key: "tokenArt" | "creatureArt", art: Record<string, TokenArt | null>) {
+    const store = this.settings[key];
+    for (const [name, value] of Object.entries(art)) {
+      if (!name.trim()) continue;
+      if (value && typeof value.image?.url === "string") store[name] = value;
+      else delete store[name];
+    }
+    await this.saveSettings();
+    if (key === "tokenArt") {
+      this.push({ push: "partiesChanged" });
+      return this.parties();
+    }
+    this.push({ push: "encountersChanged" });
+    return this.encountersPayload();
+  }
+
+  // ------------------------------------------------------------ encounters
+
+  encountersPayload(): EncountersPayload {
+    return {
+      encounters: [...this.settings.encounters].sort((a, b) => b.addedAt - a.addedAt),
+      art: this.settings.creatureArt,
+    };
+  }
+
+  isStaged(id: string): boolean {
+    return this.settings.encounters.some((e) => e.id === id);
+  }
+
+  /** Add or update an encounter in Owlbear's list. */
+  async stageEncounter(encounter: StagedEncounter) {
+    this.settings.encounters = [...this.settings.encounters.filter((e) => e.id !== encounter.id), encounter];
+    await this.saveSettings();
+    this.push({ push: "encountersChanged" });
+  }
+
+  async removeEncounter(id: string) {
+    this.settings.encounters = this.settings.encounters.filter((e) => e.id !== id);
+    await this.saveSettings();
+    this.push({ push: "encountersChanged" });
+  }
+
+  /** Called by the "Add to Owlbear" button in the statblock layout. */
+  addToOwlbear(creature: { name?: string } | string) {
+    const raw = typeof creature === "string" ? creature : creature?.name;
+    const name = raw ? (this.bestiaryName(raw) ?? raw) : "";
+    if (!name) return;
+    if (!this.connected) {
+      new Notice("Owlbear isn't connected: open your room with the Obsidian Bestiary extension.");
+      return;
+    }
+    this.push({ push: "addCreature", name });
+    new Notice(`Adding ${name} to Owlbear (hidden)`);
+  }
+
+  // ------------------------------------------------------------ Initiative Tracker import
+
   private async initiativeTrackerData(): Promise<InitiativeTrackerData | null> {
-    const plugins = (this.app as unknown as { plugins: { getPlugin(id: string): unknown } }).plugins;
-    const live = (plugins.getPlugin("initiative-tracker") as { data?: InitiativeTrackerData } | null)?.data;
+    const live = (this.plugins.getPlugin("initiative-tracker") as { data?: InitiativeTrackerData } | null)?.data;
     if (live) return live;
     try {
       const path = `${this.app.vault.configDir}/plugins/initiative-tracker/data.json`;
@@ -228,58 +376,34 @@ export default class OwlbearBestiaryBridge extends Plugin {
     }
   }
 
-  async parties(): Promise<PartiesPayload> {
+  /** Copy Initiative Tracker's players, parties and saved encounters in. Never overwrites ours. */
+  async importFromInitiativeTracker(manual: boolean) {
     const it = await this.initiativeTrackerData();
-    const fromTracker: Party[] = (it?.parties ?? []).map((p) => ({
-      name: p.name,
-      members: p.players ?? [],
-      source: "initiative-tracker",
-    }));
-    const own: Party[] = this.settings.parties.map((p) => ({ ...p, source: "bridge" }));
-    const pcs = new Set<string>([
-      ...(it?.players ?? []).filter((p) => p.player !== false && p.name).map((p) => p.name),
-      ...fromTracker.flatMap((p) => p.members),
-      ...own.flatMap((p) => p.members),
-    ]);
-    return {
-      parties: [...fromTracker, ...own],
-      pcs: [...pcs].sort((a, b) => a.localeCompare(b)),
-      art: this.settings.tokenArt,
+    if (!it) {
+      if (manual) new Notice("No Initiative Tracker data found to import.");
+      return;
+    }
+    const imported = importInitiativeTracker(it);
+    const s = this.settings;
+    const add = <T>(list: T[], items: T[], key: (t: T) => string) => {
+      const have = new Set(list.map(key));
+      const fresh = items.filter((i) => !have.has(key(i)));
+      list.push(...fresh);
+      return fresh.length;
     };
-  }
-
-  private async saveTokenArt(art: Record<string, TokenArt | null>): Promise<PartiesPayload> {
-    for (const [name, value] of Object.entries(art)) {
-      if (!name.trim()) continue;
-      if (value && typeof value.image?.url === "string") this.settings.tokenArt[name] = value;
-      else delete this.settings.tokenArt[name];
+    const players = add(s.players, imported.players, (p) => p.name);
+    const parties = add(s.parties, imported.parties, (p) => p.name);
+    const encounters = add(s.encounters, imported.encounters, (e) => e.id);
+    s.importedFromInitiativeTracker = Date.now();
+    await this.saveSettings();
+    if (players || parties || encounters || manual) {
+      new Notice(
+        `Owlbear Bestiary Bridge imported from Initiative Tracker: ${parties} parties, ${players} players, ${encounters} saved encounters.`,
+        8000,
+      );
     }
-    await this.saveSettings();
-    this.server?.broadcast({ push: "partiesChanged" } satisfies Push);
-    return this.parties();
-  }
-
-  private async saveParty(name: string, members: string[]): Promise<PartiesPayload> {
-    const clean = name.trim();
-    if (!clean) throw new Error("the party needs a name");
-    const it = await this.initiativeTrackerData();
-    if (it?.parties?.some((p) => p.name === clean)) {
-      throw new Error(`"${clean}" is an Initiative Tracker party: pick another name`);
-    }
-    const list = [...new Set(members.map((m) => m.trim()).filter(Boolean))];
-    const existing = this.settings.parties.find((p) => p.name === clean);
-    if (existing) existing.members = list;
-    else this.settings.parties.push({ name: clean, members: list });
-    await this.saveSettings();
-    this.server?.broadcast({ push: "partiesChanged" } satisfies Push);
-    return this.parties();
-  }
-
-  private async deleteParty(name: string): Promise<PartiesPayload> {
-    this.settings.parties = this.settings.parties.filter((p) => p.name !== name);
-    await this.saveSettings();
-    this.server?.broadcast({ push: "partiesChanged" } satisfies Push);
-    return this.parties();
+    this.push({ push: "partiesChanged" });
+    this.push({ push: "encountersChanged" });
   }
 
   // ------------------------------------------------------------ status
@@ -306,6 +430,8 @@ interface WorkspaceEvents {
   on(name: string, callback: () => void): import("obsidian").EventRef;
 }
 
+const LAYOUT_CALLBACK = "try { OwlbearBridge.addToOwlbear(monster); } catch (e) {}";
+
 class BridgeSettingTab extends PluginSettingTab {
   constructor(
     app: App,
@@ -316,18 +442,58 @@ class BridgeSettingTab extends PluginSettingTab {
 
   display() {
     const { containerEl } = this;
+    const s = this.plugin.settings;
     containerEl.empty();
 
     new Setting(containerEl)
       .setName("Show selected tokens in the Creature pane")
       .setDesc("When you select a linked token in Owlbear, open its statblock in Fantasy Statblocks' Creature pane.")
       .addToggle((t) =>
-        t.setValue(this.plugin.settings.showOnSelect).onChange(async (v) => {
-          this.plugin.settings.showOnSelect = v;
+        t.setValue(s.showOnSelect).onChange(async (v) => {
+          s.showOnSelect = v;
           await this.plugin.saveSettings();
         }),
       );
 
+    new Setting(containerEl).setName("Encounters and parties").setHeading();
+    new Setting(containerEl)
+      .setName("Encounter blocks")
+      .setDesc(
+        this.plugin.encounterBlocks
+          ? "This plugin shows `encounter` blocks with a Send to Owlbear button."
+          : this.plugin.initiativeTrackerEnabled
+            ? "Initiative Tracker is still enabled, so it draws `encounter` blocks. Disable it and restart Obsidian to get Send to Owlbear buttons. Meanwhile use the command “Send encounter under cursor to Owlbear”."
+            : "Restart Obsidian to show `encounter` blocks with a Send to Owlbear button.",
+      );
+    new Setting(containerEl)
+      .setName("Import from Initiative Tracker")
+      .setDesc(
+        `${s.parties.length} parties, ${s.players.length} players and ${s.encounters.length} encounters stored here. ` +
+          "Importing again only adds what's missing.",
+      )
+      .addButton((b) =>
+        b.setButtonText("Import").onClick(async () => {
+          await this.plugin.importFromInitiativeTracker(true);
+          this.display();
+        }),
+      );
+    new Setting(containerEl)
+      .setName("“Add to Owlbear” button for statblocks")
+      .setDesc(
+        "In Fantasy Statblocks → Layouts → your layout, set an Action block's callback to this, and delete the old Initiative Tracker buttons.",
+      )
+      .addText((t) => {
+        t.setValue(LAYOUT_CALLBACK).setDisabled(true);
+        t.inputEl.style.width = "100%";
+      })
+      .addButton((b) =>
+        b.setButtonText("Copy").onClick(async () => {
+          await navigator.clipboard.writeText(LAYOUT_CALLBACK);
+          new Notice("Copied");
+        }),
+      );
+
+    new Setting(containerEl).setName("Connection").setHeading();
     new Setting(containerEl)
       .setName("Port")
       .setDesc(
@@ -335,17 +501,17 @@ class BridgeSettingTab extends PluginSettingTab {
           "If you change it, set the same port in the extension's panel in Owlbear.",
       )
       .addText((t) =>
-        t.setValue(String(this.plugin.settings.port)).onChange(async (v) => {
+        t.setValue(String(s.port)).onChange(async (v) => {
           const port = Number(v);
           if (!Number.isInteger(port) || port < 1024 || port > 65535) return;
-          this.plugin.settings.port = port;
+          s.port = port;
           await this.plugin.saveSettings();
         }),
       )
       .addButton((b) =>
         b.setButtonText("Restart").onClick(async () => {
           await this.plugin.startServer();
-          new Notice(`Owlbear Bestiary Bridge listening on 127.0.0.1:${this.plugin.settings.port}`);
+          new Notice(`Owlbear Bestiary Bridge listening on 127.0.0.1:${s.port}`);
         }),
       );
   }

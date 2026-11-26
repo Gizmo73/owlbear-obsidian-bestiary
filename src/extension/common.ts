@@ -2,7 +2,7 @@
 
 import type { Item } from "@owlbear-rodeo/sdk";
 import type { BestiaryEntry } from "../shared/bestiary";
-import { DEFAULT_PORT, type PartiesPayload, type TokenArt } from "../shared/protocol";
+import { DEFAULT_PORT, type EncountersPayload, type PartiesPayload, type TokenArt } from "../shared/protocol";
 import { EMPTY_COMBAT, type CombatState, type MonsterToken, type PcToken, type PublicOrder } from "../shared/turns";
 
 export const EXT_ID = "com.gizmo73.obsidian-bestiary";
@@ -96,6 +96,24 @@ export interface CachedIndex {
 const INDEX_KEY = "obsidian-bestiary:index";
 const PORT_KEY = "obsidian-bestiary:port";
 const PARTIES_KEY = "obsidian-bestiary:parties";
+const ENCOUNTERS_KEY = "obsidian-bestiary:encounters";
+
+export function loadEncounters(): EncountersPayload | null {
+  try {
+    const raw = localStorage.getItem(ENCOUNTERS_KEY);
+    return raw ? (JSON.parse(raw) as EncountersPayload) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveEncounters(payload: EncountersPayload) {
+  try {
+    localStorage.setItem(ENCOUNTERS_KEY, JSON.stringify(payload));
+  } catch {
+    /* ignore */
+  }
+}
 const LAST_PARTY_KEY = "obsidian-bestiary:last-party";
 
 export function loadParties(): PartiesPayload | null {
@@ -192,7 +210,11 @@ export type ChannelMessage =
   | { type: "parties"; parties: PartiesPayload | null; error?: string }
   | { type: "save-party"; name: string; members: string[] }
   | { type: "delete-party"; name: string }
-  | { type: "save-art"; art: Record<string, TokenArt | null> };
+  | { type: "save-art"; art: Record<string, TokenArt | null> }
+  | { type: "get-encounters" }
+  | { type: "encounters"; payload: EncountersPayload | null; error?: string }
+  | { type: "remove-encounter"; id: string }
+  | { type: "save-creature-art"; art: Record<string, TokenArt | null> };
 
 /** Same-origin channel between this extension's iframes in this browser tab. */
 export function openChannel(onMessage: (msg: ChannelMessage) => void) {

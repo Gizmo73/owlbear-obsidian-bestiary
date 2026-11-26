@@ -3485,6 +3485,122 @@
     }
   };
 
+  // node_modules/@owlbear-rodeo/sdk/lib/builders/ImageBuilder.js
+  var ImageBuilder = class extends GenericItemBuilder {
+    constructor(player, image, grid) {
+      super(player);
+      this._image = image;
+      this._grid = grid;
+      this._item.name = "Image";
+      this._text = {
+        richText: [
+          {
+            type: "paragraph",
+            children: [{ text: "" }]
+          }
+        ],
+        plainText: "",
+        style: {
+          padding: 8,
+          fontFamily: "Roboto",
+          fontSize: 24,
+          fontWeight: 400,
+          textAlign: "CENTER",
+          textAlignVertical: "BOTTOM",
+          fillColor: "white",
+          fillOpacity: 1,
+          strokeColor: "white",
+          strokeOpacity: 1,
+          strokeWidth: 0,
+          lineHeight: 1.5
+        },
+        type: "PLAIN",
+        width: "AUTO",
+        height: "AUTO"
+      };
+      this._textItemType = "LABEL";
+    }
+    text(text) {
+      this._text = text;
+      return this.self();
+    }
+    textItemType(textItemType) {
+      this._textItemType = textItemType;
+      return this.self();
+    }
+    textWidth(width) {
+      this._text.width = width;
+      return this.self();
+    }
+    textHeight(height) {
+      this._text.height = height;
+      return this.self();
+    }
+    richText(richText) {
+      this._text.richText = richText;
+      return this.self();
+    }
+    plainText(plainText) {
+      this._text.plainText = plainText;
+      return this.self();
+    }
+    textType(textType) {
+      this._text.type = textType;
+      return this.self();
+    }
+    textPadding(padding) {
+      this._text.style.padding = padding;
+      return this.self();
+    }
+    fontFamily(fontFamily) {
+      this._text.style.fontFamily = fontFamily;
+      return this.self();
+    }
+    fontSize(fontSize) {
+      this._text.style.fontSize = fontSize;
+      return this.self();
+    }
+    fontWeight(fontWeight) {
+      this._text.style.fontWeight = fontWeight;
+      return this.self();
+    }
+    textAlign(textAlign) {
+      this._text.style.textAlign = textAlign;
+      return this.self();
+    }
+    textAlignVertical(textAlignVertical) {
+      this._text.style.textAlignVertical = textAlignVertical;
+      return this.self();
+    }
+    textFillColor(fillColor) {
+      this._text.style.fillColor = fillColor;
+      return this.self();
+    }
+    textFillOpacity(fillOpacity) {
+      this._text.style.fillOpacity = fillOpacity;
+      return this.self();
+    }
+    textStrokeColor(strokeColor) {
+      this._text.style.strokeColor = strokeColor;
+      return this.self();
+    }
+    textStrokeOpacity(strokeOpacity) {
+      this._text.style.strokeOpacity = strokeOpacity;
+      return this.self();
+    }
+    textStrokeWidth(strokeWidth) {
+      this._text.style.strokeWidth = strokeWidth;
+      return this.self();
+    }
+    textLineHeight(lineHeight) {
+      this._text.style.lineHeight = lineHeight;
+      return this.self();
+    }
+    build() {
+      return Object.assign(Object.assign({}, this._item), { type: "IMAGE", image: this._image, grid: this._grid, text: this._text, textItemType: this._textItemType });
+    }
+  };
+
   // node_modules/@owlbear-rodeo/sdk/lib/builders/ShapeBuilder.js
   var ShapeBuilder = class extends GenericItemBuilder {
     constructor(player) {
@@ -3814,6 +3930,9 @@
     /** True if the current site is embedded in an instance of Owlbear Rodeo */
     isAvailable: Boolean(details.origin)
   };
+  function buildImage(image, grid) {
+    return new ImageBuilder(playerApi, image, grid);
+  }
   function buildShape() {
     return new ShapeBuilder(playerApi);
   }
@@ -3958,7 +4077,7 @@
   }
 
   // src/shared/protocol.ts
-  var PROTOCOL_VERSION = 3;
+  var PROTOCOL_VERSION = 4;
   var MIN_PROTOCOL_VERSION = 1;
   var DEFAULT_PORT = 27190;
 
@@ -4001,7 +4120,7 @@
         return Promise.reject(new Error("not connected to Obsidian"));
       }
       const id = this.nextId++;
-      this.ws.send(JSON.stringify({ id, ...req }));
+      this.ws.send(JSON.stringify({ ...req, id }));
       return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
           this.pending.delete(id);
@@ -4126,9 +4245,37 @@
     }
     return { monsters, pcs };
   }
+  function usedNumbers(items, creature, except = /* @__PURE__ */ new Set()) {
+    const out = [];
+    for (const item of items) {
+      if (except.has(item.id)) continue;
+      const c = readCreature(item.metadata);
+      if (c && c.name === creature && c.n) out.push(c.n);
+    }
+    return out;
+  }
+  function creatureFromEntry(entry) {
+    const max = entry.hp ?? 1;
+    return { name: entry.name, hp: max, maxHp: max, ac: entry.ac, init: entry.init };
+  }
   var INDEX_KEY = "obsidian-bestiary:index";
   var PORT_KEY = "obsidian-bestiary:port";
   var PARTIES_KEY = "obsidian-bestiary:parties";
+  var ENCOUNTERS_KEY = "obsidian-bestiary:encounters";
+  function loadEncounters() {
+    try {
+      const raw = localStorage.getItem(ENCOUNTERS_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+  function saveEncounters(payload) {
+    try {
+      localStorage.setItem(ENCOUNTERS_KEY, JSON.stringify(payload));
+    } catch {
+    }
+  }
   function loadParties() {
     try {
       const raw = localStorage.getItem(PARTIES_KEY);
@@ -4306,11 +4453,147 @@
     if (created.length) await lib_default.scene.local.addItems(created);
   }
 
+  // src/extension/assets.ts
+  function describeError(err) {
+    if (err instanceof Error) return err.message;
+    if (typeof err === "string") return err;
+    const message = err?.message ?? err?.error;
+    if (typeof message === "string") return message;
+    try {
+      return JSON.stringify(err) ?? String(err);
+    } catch {
+      return String(err);
+    }
+  }
+  function toArt(d) {
+    return {
+      name: d.name,
+      image: { url: d.image.url, mime: d.image.mime, width: d.image.width, height: d.image.height },
+      grid: { dpi: d.grid.dpi, offset: { x: d.grid.offset.x, y: d.grid.offset.y } },
+      scale: { x: d.scale.x, y: d.scale.y },
+      rotation: d.rotation,
+      text: d.text,
+      textItemType: d.textItemType,
+      description: d.description
+    };
+  }
+  function artFromItem(item) {
+    return toArt({ ...item, type: "CHARACTER" });
+  }
+  async function pickImages(search2, multiple = true) {
+    const attempts = [
+      () => lib_default.assets.downloadImages(multiple, search2 || void 0, "CHARACTER"),
+      () => lib_default.assets.downloadImages(multiple),
+      () => lib_default.assets.downloadImages()
+    ];
+    let error = "";
+    for (const attempt of attempts) {
+      try {
+        return { picks: await attempt() ?? [] };
+      } catch (err) {
+        error = describeError(err);
+        console.warn("[obsidian-bestiary] asset picker failed:", err);
+      }
+    }
+    return { picks: [], error };
+  }
+  async function tokenSize(art) {
+    const dpi = await lib_default.scene.grid.getDpi();
+    return art.image.width / art.grid.dpi * dpi * Math.abs(art.scale.x);
+  }
+  async function viewCentre() {
+    const [w, h] = await Promise.all([lib_default.viewport.getWidth(), lib_default.viewport.getHeight()]);
+    return lib_default.viewport.inverseTransformPoint({ x: w / 2, y: h / 2 });
+  }
+  function buildToken(art, position, metadata, visible = true) {
+    let b = buildImage(art.image, art.grid).name(art.name).scale(art.scale).rotation(art.rotation).layer("CHARACTER").position(position).visible(visible).metadata(metadata);
+    if (art.text) b = b.text(art.text);
+    if (art.textItemType) b = b.textItemType(art.textItemType);
+    if (art.description) b = b.description(art.description);
+    return b.build();
+  }
+
+  // src/extension/insert.ts
+  async function insertCreatures(specs, opts) {
+    const result = { placed: [], skipped: [], ids: [] };
+    const items = await lib_default.scene.items.getItems();
+    const art = { ...opts.art };
+    const learned = {};
+    const rows = specs.filter((s) => s.count > 0).map((s) => {
+      const entry = opts.search?.find(s.name) ?? null;
+      return { spec: s, entry, key: entry?.name ?? s.name };
+    });
+    for (const item of items) {
+      const c = readCreature(item.metadata);
+      if (c && !art[c.name] && isImage(item) && item.image?.url) learned[c.name] = art[c.name] = artFromItem(item);
+    }
+    for (const { key } of rows) {
+      if (art[key] || result.pickerError !== void 0) continue;
+      const { picks, error } = await pickImages(key, false);
+      if (error) result.pickerError = error;
+      else if (picks[0]) {
+        learned[key] = art[key] = toArt(picks[0]);
+      }
+    }
+    if (Object.keys(learned).length) opts.saveArt(learned);
+    const placeable = rows.filter((r) => art[r.key]);
+    result.skipped = rows.filter((r) => !art[r.key]).map((r) => r.key);
+    if (!placeable.length) return result;
+    const dpi = await lib_default.scene.grid.getDpi();
+    const centre = await viewCentre();
+    const sizes = await Promise.all(placeable.map((r) => tokenSize(art[r.key])));
+    const rowHeights = sizes.map((s) => Math.max(dpi, s));
+    const total = rowHeights.reduce((a, b) => a + b, 0);
+    let y = centre.y - total / 2;
+    const tokens = [];
+    for (const [i, { spec, entry, key }] of placeable.entries()) {
+      const spacing = rowHeights[i];
+      const rowY = y + spacing / 2;
+      y += spacing;
+      const numbers = entry ? nextNumbers(usedNumbers(items, entry.name), spec.count) : [];
+      for (let k = 0; k < spec.count; k++) {
+        const x = centre.x + (k - (spec.count - 1) / 2) * spacing;
+        const position = await lib_default.scene.grid.snapPosition({ x, y: rowY });
+        let metadata = {};
+        if (entry) {
+          const base = creatureFromEntry(entry);
+          const maxHp = spec.hp ?? base.maxHp;
+          const creature = {
+            ...base,
+            hp: maxHp,
+            maxHp,
+            ac: spec.ac ?? base.ac,
+            init: spec.mod ?? base.init,
+            n: numbers[k]
+          };
+          metadata = { [TOKEN_KEY]: creature };
+        }
+        tokens.push(buildToken(art[key], position, metadata, !opts.hidden));
+      }
+      result.placed.push({ name: key, count: spec.count, linked: !!entry });
+    }
+    await lib_default.scene.items.addItems(tokens);
+    result.ids = tokens.map((t) => t.id);
+    return result;
+  }
+  function describeInsert(r, hidden) {
+    const parts = [];
+    const linked = r.placed.filter((p) => p.linked);
+    const unlinked = r.placed.filter((p) => !p.linked);
+    const list = (ps) => ps.map((p) => p.count > 1 ? `${p.name} \xD7${p.count}` : p.name).join(", ");
+    if (linked.length) parts.push(`Added ${list(linked)}${hidden ? " (hidden)" : ""}`);
+    if (unlinked.length) parts.push(`${list(unlinked)} placed unlinked (not in your bestiary)`);
+    if (r.pickerError) parts.push(`Owlbear's token picker didn't open (${r.pickerError}); drag one ${r.skipped.join(", ")} onto the map and try again`);
+    else if (r.skipped.length) parts.push(`no token picked for ${r.skipped.join(", ")}`);
+    return parts.length ? `${parts.join("; ")}.` : "Nothing to add.";
+  }
+
   // src/extension/background.ts
   var status = { state: "connecting", port: getPort() };
   var index = loadIndex();
   var search = index ? new BestiarySearch(index.creatures) : null;
   var parties = loadParties();
+  var encounters = loadEncounters();
   var bridge = null;
   var playerName = "";
   var gmStarted = false;
@@ -4348,6 +4631,16 @@
         break;
       case "save-art":
         void partyRequest({ kind: "saveTokenArt", art: msg.art }, 3);
+        break;
+      case "get-encounters":
+        channel.post({ type: "encounters", payload: encounters });
+        void fetchEncounters();
+        break;
+      case "remove-encounter":
+        void encounterRequest({ kind: "removeEncounter", encounterId: msg.id });
+        break;
+      case "save-creature-art":
+        void encounterRequest({ kind: "saveCreatureArt", art: msg.art });
         break;
       default:
         break;
@@ -4393,6 +4686,41 @@
     } catch (err) {
       channel.post({ type: "parties", parties, error: err.message });
     }
+  }
+  async function fetchEncounters() {
+    if (!partiesSupported(4)) return;
+    try {
+      encounters = await bridge.request({ kind: "getEncounters" });
+      saveEncounters(encounters);
+      channel.post({ type: "encounters", payload: encounters });
+    } catch {
+    }
+  }
+  async function encounterRequest(req) {
+    if (!partiesSupported(4)) {
+      channel.post({
+        type: "encounters",
+        payload: encounters,
+        error: bridge?.connected ? "Update Owlbear Bestiary Bridge in Obsidian to use encounters" : "Connect to Obsidian to change the encounter list"
+      });
+      return;
+    }
+    try {
+      encounters = await bridge.request(req);
+      saveEncounters(encounters);
+      channel.post({ type: "encounters", payload: encounters });
+    } catch (err) {
+      channel.post({ type: "encounters", payload: encounters, error: err.message });
+    }
+  }
+  async function addCreature(name) {
+    const result = await insertCreatures([{ name, count: 1 }], {
+      search,
+      art: encounters?.art ?? {},
+      saveArt: (art) => void encounterRequest({ kind: "saveCreatureArt", art }),
+      hidden: true
+    });
+    await lib_default.notification.show(describeInsert(result, true), result.placed.length ? "SUCCESS" : "WARNING");
   }
   async function showInObsidian(name) {
     if (!bridge?.connected) return;
@@ -4505,11 +4833,14 @@
         });
         if (!index || index.version !== welcome.bestiaryVersion || index.vault !== welcome.vault) void fetchBestiary();
         void fetchParties();
+        void fetchEncounters();
       },
       onDisconnected: (error) => setStatus({ state: "offline", error }),
       onPush: (push) => {
         if (push.push === "bestiaryChanged" && push.version !== index?.version) void fetchBestiary();
         if (push.push === "partiesChanged") void fetchParties();
+        if (push.push === "encountersChanged") void fetchEncounters();
+        if (push.push === "addCreature") void addCreature(push.name).catch((err) => console.warn("[obsidian-bestiary] add failed", err));
       }
     });
     bridge.start();

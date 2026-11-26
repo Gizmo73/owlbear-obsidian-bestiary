@@ -87,6 +87,9 @@ ol.public li.active { background: var(--hover); font-weight: 700; box-shadow: in
 .member input { width: auto; }
 .error { color: var(--fail); font-size: 12px; }
 .notice { color: var(--obr-text-2); font-size: 12px; margin: 2px 0 6px; }
+.section { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--obr-text-2); margin: 12px 0 2px; border-top: 1px solid var(--line); padding-top: 8px; }
+.enc-summary { margin: 2px 0 6px; }
+.bar select#encounter { flex: 1; min-width: 0; }
 .help { color: var(--obr-text-2); font-size: 12px; margin: 8px 0; }
 details.conn-details { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 6px; }
 summary { cursor: pointer; color: var(--obr-text-2); font-size: 12px; }

@@ -8,7 +8,9 @@ Two parts work together:
 - **Obsidian Bestiary**: an Owlbear Rodeo extension (in `src/extension`, published from `docs/`).
 - **Owlbear Bestiary Bridge**: an Obsidian plugin (in `src/plugin`, built into `dist/`) that
   shares your [Fantasy Statblocks](https://github.com/javalent/fantasy-statblocks) bestiary
-  with the extension over a local connection (`127.0.0.1`, port 27190).
+  with the extension over a local connection (`127.0.0.1`, port 27190). It also keeps your
+  players, parties, encounters and token images, and draws `encounter` blocks, so
+  Initiative Tracker isn't needed.
 
 ## What it does
 
@@ -27,8 +29,8 @@ Two parts work together:
   opens in Fantasy Statblocks' Creature pane in Obsidian. Spell `[[wikilinks]]` work as usual.
 
 **Turn order** (toolbar icon → panel)
-- Pick a party: Initiative Tracker's parties are listed, and you can make new ones in the
-  panel (saved in the bridge plugin's settings). The last party is remembered.
+- Pick a party, or make or edit one in the panel (saved in the bridge plugin's settings in your
+  vault). The last party is remembered.
 - *Insert party* puts the party's tokens on the map in a row at the centre of your view,
   already linked. The first time, Owlbear's asset picker opens: tick your PC tokens and they're
   matched to PCs by name ("Berald" or "Berald Barclay" → Berald). The link from PC to image is
@@ -40,8 +42,8 @@ Two parts work together:
   (d20 + Dex), so Goblin 1, 2 and 3 act back to back. A goblin added mid-fight joins their roll.
   Type the PCs' rolls; any number can be edited. Ties go to monsters.
 - Click a monster's HP in the panel to damage or heal it: `7`, `+5`, `=20` or `max 30`.
-- *Start* / *Next* / *Previous*: the active token gets a gold ring (only you see it), are
-  selected so you can move them straight away, and their statblock opens in the Creature pane.
+- *Start* / *Next* / *Previous*: the active token gets a gold ring (only you see it), is
+  selected so you can move it straight away, and its statblock opens in the Creature pane.
   Rounds are counted. Clicking a row's name selects its token too.
 - The eye button on a monster hides or reveals its token for players, and it works the other way
   too: hide a token on the map and the panel greys it out. Hidden monsters haven't joined the
@@ -54,7 +56,26 @@ Players otherwise only see token positions: HP text and turn rings are local to 
 The extension keeps a copy of the bestiary and parties, so linking, HP and turns keep working
 if Obsidian disconnects; only the Creature pane needs the live connection.
 
-Planned next: loading encounters (saved Initiative Tracker encounters and `encounter` blocks).
+**Encounters**
+- `encounter` blocks use Initiative Tracker's syntax (`- 5: Gargoyle`, `- 2: Goblin, 10, 15`,
+  `name:`, `party:` …), so existing blocks keep working. Each shows its creatures (click one to
+  open it in the Creature pane) and a **Send to Owlbear** button. Only encounters you send appear
+  in Owlbear, so the list holds what you plan to run. Blocks without a `name:` are called
+  "Note › Heading". The command *Send encounter under cursor to Owlbear* does the same from the editor.
+- In the panel, pick an encounter and press **Insert**: its monsters arrive **hidden**, one row
+  per creature at the centre of your view, linked and numbered (Goblin 4, 5, … if some are already
+  there). Reveal each token when it joins the fight; that's also when it joins the turn order.
+  The first time a creature is used, Owlbear's asset picker opens (searched by its name) to choose
+  its token; the image is saved in your vault after that. Creatures not in your bestiary are placed
+  as unlinked tokens. ✕ removes an encounter from the list; otherwise it stays for reuse.
+- **Add to Owlbear** button on statblocks (see Install): drops one hidden, linked token of that
+  creature into the current scene, handy for reinforcements.
+
+**Coming from Initiative Tracker**: on first run the bridge plugin copies Initiative Tracker's
+players, parties and saved encounters (the saved encounters land in Owlbear's encounter list).
+Re-run it any time from settings or the command palette; it only adds what's missing. Then
+disable Initiative Tracker and restart Obsidian so `encounter` blocks get the Send to Owlbear
+button. Until then the command above works alongside it.
 
 ## Install
 
@@ -70,6 +91,10 @@ web viewer (tested with Obsidian 1.13.7).
 2. **Owlbear extension**: Profile → Extensions → *Add Custom Extension* →
    `https://gizmo73.github.io/owlbear-obsidian-bestiary/manifest.json`, then enable it
    in your room.
+3. **Add to Owlbear button** (optional): in Fantasy Statblocks → Layouts → your layout, set an
+   *Action* block's callback to `try { OwlbearBridge.addToOwlbear(monster); } catch (e) {}`
+   and delete the old Initiative Tracker action buttons. The plugin's settings have a Copy button
+   for this line.
 
 The toolbar icon opens the turn-order panel; connection details are at the bottom of it.
 
@@ -79,7 +104,8 @@ The toolbar icon opens the turn-order panel; connection details are at the botto
 npm install
 npm run build       # docs/ (extension) and dist/owlbear-bestiary-bridge/ (plugin)
 npm run typecheck
-npm test            # unit checks + end-to-end run against a fake Owlbear host in headless Chromium
+npm test            # unit checks, the plugin against a fake Obsidian, and the extension against
+                    # a fake Owlbear host, all in headless Chromium
 ```
 
 **Releasing the plugin**: bump `version` in `package.json`, run `npm run build`, commit, then
