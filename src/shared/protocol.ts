@@ -4,7 +4,9 @@
 
 import type { BestiaryEntry } from "./bestiary";
 
-export const PROTOCOL_VERSION = 1;
+export const PROTOCOL_VERSION = 2;
+/** Oldest plugin protocol the extension still works with (parties need 2). */
+export const MIN_PROTOCOL_VERSION = 1;
 export const DEFAULT_PORT = 27190;
 
 /** Origins allowed to open the WebSocket (where the extension is hosted). */
@@ -15,7 +17,10 @@ export const EXTENSION_ORIGINS = ["https://gizmo73.github.io"];
 export type Request =
   | { kind: "hello"; protocol: number; player: string }
   | { kind: "getBestiary" }
-  | { kind: "showCreature"; name: string };
+  | { kind: "showCreature"; name: string }
+  | { kind: "getParties" }
+  | { kind: "saveParty"; name: string; members: string[] }
+  | { kind: "deleteParty"; name: string };
 
 export type RequestEnvelope = { id: number } & Request;
 
@@ -39,13 +44,28 @@ export interface ShowResult {
   shown: string | null;
 }
 
+export interface Party {
+  name: string;
+  members: string[];
+  /** Parties from Initiative Tracker are read-only; the bridge's own can be edited. */
+  source: "initiative-tracker" | "bridge";
+}
+
+export interface PartiesPayload {
+  parties: Party[];
+  /** Every PC name known (Initiative Tracker players + party members), for linking PC tokens. */
+  pcs: string[];
+}
+
 export type ResponseFor<R extends Request> = R extends { kind: "hello" }
   ? Welcome
   : R extends { kind: "getBestiary" }
     ? BestiaryPayload
     : R extends { kind: "showCreature" }
       ? ShowResult
-      : never;
+      : R extends { kind: "getParties" | "saveParty" | "deleteParty" }
+        ? PartiesPayload
+        : never;
 
 export type ResponseEnvelope =
   | { id: number; ok: true; result: unknown }
@@ -53,4 +73,6 @@ export type ResponseEnvelope =
 
 // ------------------------------------------------------------ pushes (plugin -> extension, unprompted)
 
-export type Push = { push: "bestiaryChanged"; version: string; creatureCount: number };
+export type Push =
+  | { push: "bestiaryChanged"; version: string; creatureCount: number }
+  | { push: "partiesChanged" };

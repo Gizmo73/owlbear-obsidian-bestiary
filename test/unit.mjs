@@ -15,7 +15,7 @@ await mkdir(tmp, { recursive: true });
 await build({
   stdin: {
     contents: `export * from "../src/shared/names.ts"; export * from "../src/shared/hp.ts";
-export * from "../src/shared/search.ts"; export * from "../src/shared/bestiary.ts";`,
+export * from "../src/shared/search.ts"; export * from "../src/shared/bestiary.ts"; export * from "../src/shared/turns.ts";`,
     resolveDir: join(root, "test"),
     loader: "ts",
   },
@@ -62,6 +62,37 @@ eq("players skipped", S.toEntry({ name: "Berald", player: true }), null);
 const fsData = JSON.parse(await readFile(join(root, "Fantasy Statblocks", "data.json"), "utf8"));
 const saved = fsData.monsters.map(([, m]) => S.toEntry(m)).filter(Boolean);
 eq(`all ${fsData.monsters.length} saved Fantasy Statblocks creatures index with numeric HP/AC`, saved.every((e) => Number.isInteger(e.hp) && Number.isInteger(e.ac)), true);
+
+// ------------------------------------------------------------ turn order
+const mon = (id, creature, mod, hp = 10, visible = true) => ({ id, creature, mod, hp, maxHp: 10, visible });
+const base = { ...S.EMPTY_COMBAT, members: ["Berald", "Dogg"], init: { "m:goblin": 12, "m:orc": 12, "p:berald": 12, "p:dogg": 5 } };
+let ents = S.buildEntries([mon("g1", "Goblin", 2), mon("g2", "Goblin", 2), mon("o1", "Orc", 1), mon("w1", "Wolf", 2)], [{ id: "t1", pc: "Berald", visible: true }], base);
+eq("grouped by creature, PCs from party + linked tokens", ents.map((e) => `${e.id}:${e.tokens.length}`), ["m:goblin:2", "m:orc:1", "p:berald:1", "p:dogg:0", "m:wolf:1"]);
+eq("display name counts tokens", ents.map(S.displayName), ["Goblin ×2", "Orc", "Berald", "Dogg", "Wolf"]);
+const run = (state, n) => {
+  const seen = [];
+  for (let i = 0; i < n; i++) {
+    state = { ...state, ...S.step(ents, state, 1) };
+    seen.push(`${state.round}:${state.turn}`);
+  }
+  return seen;
+};
+eq("start then cycle; unrolled Wolf never acts", run(base, 5), ["1:m:goblin", "1:m:orc", "1:p:berald", "1:p:dogg", "2:m:goblin"]);
+eq("previous from first wraps back a round", S.step(ents, { ...base, round: 2, turn: "m:goblin" }, -1), { turn: "p:dogg", round: 1 });
+eq("previous never below round 1", S.step(ents, { ...base, round: 1, turn: "m:goblin" }, -1), { turn: "p:dogg", round: 1 });
+ents = S.buildEntries([mon("g1", "Goblin", 2), mon("o1", "Orc", 1)], [], { ...base, held: ["m:orc"] });
+eq("held entry skipped", S.step(ents, { ...base, held: ["m:orc"], round: 1, turn: "m:goblin" }, 1), { turn: "p:berald", round: 1 });
+eq("current entry held mid-turn: Next moves on from its slot", S.step(ents, { ...base, held: ["m:orc"], round: 1, turn: "m:orc" }, 1), { turn: "p:berald", round: 1 });
+ents = S.buildEntries([mon("g1", "Goblin", 2, 0), mon("g2", "Goblin", 2, -3), mon("o1", "Orc", 1)], [], base);
+eq("group is down only when every token is", [ents.find((e) => e.id === "m:goblin").down, ents.find((e) => e.id === "m:orc").down], [true, false]);
+eq("downed group skipped", S.step(ents, { ...base, round: 3, turn: "p:dogg" }, 1), { turn: "m:orc", round: 4 });
+ents = S.buildEntries([mon("g1", "Goblin", 2), mon("o1", "Orc", 1, 10, false)], [], { ...base, turn: "m:goblin", round: 1 });
+eq("public order: no HP, hidden-on-map monsters left out", S.publicOrder(ents, { ...base, turn: "m:goblin", round: 1 }), {
+  round: 1,
+  entries: [{ name: "Goblin", active: true }, { name: "Berald", active: false }, { name: "Dogg", active: false }],
+});
+eq("nothing rolled: no turn", S.step(S.buildEntries([mon("g1", "Goblin", 2)], [], S.EMPTY_COMBAT), S.EMPTY_COMBAT, 1), { turn: null, round: 0 });
+eq("d20 range", [S.rollD20(() => 0), S.rollD20(() => 0.999)], [1, 20]);
 
 // ------------------------------------------------------------ search on real vault names
 const vault = join(root, "..", "campaign-master", "Campaign", "Statblocks");

@@ -1,6 +1,7 @@
 // WebSocket client to the Obsidian plugin, with request/response and auto-reconnect.
 
 import {
+  MIN_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
   type Push,
   type Request,
@@ -97,10 +98,8 @@ export class BridgeClient {
       this.failures = 0;
       try {
         const welcome = await this.request({ kind: "hello", protocol: PROTOCOL_VERSION, player: this.player() });
-        if (welcome.protocol !== PROTOCOL_VERSION) {
-          this.handlers.onDisconnected(
-            `version mismatch: update ${welcome.protocol > PROTOCOL_VERSION ? "the extension" : "the Obsidian plugin"}`,
-          );
+        if (welcome.protocol < MIN_PROTOCOL_VERSION) {
+          this.handlers.onDisconnected("the Obsidian plugin is too old: update Owlbear Bestiary Bridge");
           ws.close();
           return;
         }

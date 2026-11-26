@@ -195,10 +195,10 @@
         }
       }
       function _onceWrap(target, type, listener) {
-        var state = { fired: false, wrapFn: void 0, target, type, listener };
-        var wrapped = onceWrapper.bind(state);
+        var state2 = { fired: false, wrapFn: void 0, target, type, listener };
+        var wrapped = onceWrapper.bind(state2);
         wrapped.listener = listener;
-        state.wrapFn = wrapped;
+        state2.wrapFn = wrapped;
         return wrapped;
       }
       EventEmitter2.prototype.once = function once2(type, listener) {
@@ -405,22 +405,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var PlayerApi = class {
@@ -439,14 +439,14 @@
         return selection;
       });
     }
-    select(items, replace) {
+    select(items2, replace) {
       return __awaiter(this, void 0, void 0, function* () {
-        yield this.messageBus.sendAsync("OBR_PLAYER_SELECT", { items, replace });
+        yield this.messageBus.sendAsync("OBR_PLAYER_SELECT", { items: items2, replace });
       });
     }
-    deselect(items) {
+    deselect(items2) {
       return __awaiter(this, void 0, void 0, function* () {
-        yield this.messageBus.sendAsync("OBR_PLAYER_DESELECT", { items });
+        yield this.messageBus.sendAsync("OBR_PLAYER_DESELECT", { items: items2 });
       });
     }
     getName() {
@@ -490,8 +490,8 @@
     }
     getRole() {
       return __awaiter(this, void 0, void 0, function* () {
-        const { role } = yield this.messageBus.sendAsync("OBR_PLAYER_GET_ROLE", {});
-        return role;
+        const { role: role2 } = yield this.messageBus.sendAsync("OBR_PLAYER_GET_ROLE", {});
+        return role2;
       });
     }
     getMetadata() {
@@ -507,8 +507,8 @@
     }
     hasPermission(permission) {
       return __awaiter(this, void 0, void 0, function* () {
-        const role = yield this.getRole();
-        if (role === "GM") {
+        const role2 = yield this.getRole();
+        if (role2 === "GM") {
           return true;
         }
         const { permissions } = yield this.messageBus.sendAsync("OBR_ROOM_GET_PERMISSIONS", {});
@@ -545,22 +545,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var ViewportApi = class {
@@ -766,22 +766,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var NotificationApi = class {
@@ -812,22 +812,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var SceneFogApi = class {
@@ -893,22 +893,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var SceneGridApi = class {
@@ -1045,22 +1045,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var SceneHistoryApi = class {
@@ -1177,8 +1177,8 @@
     }
   }
   function getArchtype(thing) {
-    const state = thing[DRAFT_STATE];
-    return state ? state.type_ : Array.isArray(thing) ? 1 : isMap(thing) ? 2 : isSet(thing) ? 3 : 0;
+    const state2 = thing[DRAFT_STATE];
+    return state2 ? state2.type_ : Array.isArray(thing) ? 1 : isMap(thing) ? 2 : isSet(thing) ? 3 : 0;
   }
   function has(thing, prop) {
     return getArchtype(thing) === 2 ? thing.has(prop) : Object.prototype.hasOwnProperty.call(thing, prop);
@@ -1208,8 +1208,8 @@
   function isSet(target) {
     return target instanceof Set;
   }
-  function latest(state) {
-    return state.copy_ || state.base_;
+  function latest(state2) {
+    return state2.copy_ || state2.base_;
   }
   function shallowCopy(base, strict) {
     if (isMap(base)) {
@@ -1327,11 +1327,11 @@
     return currentScope = createScope(currentScope, immer2);
   }
   function revokeDraft(draft) {
-    const state = draft[DRAFT_STATE];
-    if (state.type_ === 0 || state.type_ === 1)
-      state.revoke_();
+    const state2 = draft[DRAFT_STATE];
+    if (state2.type_ === 0 || state2.type_ === 1)
+      state2.revoke_();
     else
-      state.revoked_ = true;
+      state2.revoked_ = true;
   }
   function processResult(result, scope) {
     scope.unfinalizedDrafts_ = scope.drafts_.length;
@@ -1368,28 +1368,28 @@
     if (isFrozen(value))
       return value;
     const useStrictIteration = rootScope.immer_.shouldUseStrictIteration();
-    const state = value[DRAFT_STATE];
-    if (!state) {
+    const state2 = value[DRAFT_STATE];
+    if (!state2) {
       each(
         value,
-        (key, childValue) => finalizeProperty(rootScope, state, value, key, childValue, path),
+        (key, childValue) => finalizeProperty(rootScope, state2, value, key, childValue, path),
         useStrictIteration
       );
       return value;
     }
-    if (state.scope_ !== rootScope)
+    if (state2.scope_ !== rootScope)
       return value;
-    if (!state.modified_) {
-      maybeFreeze(rootScope, state.base_, true);
-      return state.base_;
+    if (!state2.modified_) {
+      maybeFreeze(rootScope, state2.base_, true);
+      return state2.base_;
     }
-    if (!state.finalized_) {
-      state.finalized_ = true;
-      state.scope_.unfinalizedDrafts_--;
-      const result = state.copy_;
+    if (!state2.finalized_) {
+      state2.finalized_ = true;
+      state2.scope_.unfinalizedDrafts_--;
+      const result = state2.copy_;
       let resultEach = result;
       let isSet2 = false;
-      if (state.type_ === 3) {
+      if (state2.type_ === 3) {
         resultEach = new Set(result);
         result.clear();
         isSet2 = true;
@@ -1398,7 +1398,7 @@
         resultEach,
         (key, childValue) => finalizeProperty(
           rootScope,
-          state,
+          state2,
           result,
           key,
           childValue,
@@ -1410,14 +1410,14 @@
       maybeFreeze(rootScope, result, false);
       if (path && rootScope.patches_) {
         getPlugin("Patches").generatePatches_(
-          state,
+          state2,
           path,
           rootScope.patches_,
           rootScope.inversePatches_
         );
       }
     }
-    return state.copy_;
+    return state2.copy_;
   }
   function finalizeProperty(rootScope, parentState, targetObject, prop, childValue, rootPath, targetIsSet) {
     if (childValue == null) {
@@ -1463,7 +1463,7 @@
   }
   function createProxyProxy(base, parent) {
     const isArray = Array.isArray(base);
-    const state = {
+    const state2 = {
       type_: isArray ? 1 : 0,
       // Track which produce call this is associated with.
       scope_: parent ? parent.scope_ : getCurrentScope(),
@@ -1486,91 +1486,91 @@
       revoke_: null,
       isManual_: false
     };
-    let target = state;
+    let target = state2;
     let traps = objectTraps;
     if (isArray) {
-      target = [state];
+      target = [state2];
       traps = arrayTraps;
     }
     const { revoke, proxy } = Proxy.revocable(target, traps);
-    state.draft_ = proxy;
-    state.revoke_ = revoke;
+    state2.draft_ = proxy;
+    state2.revoke_ = revoke;
     return proxy;
   }
   var objectTraps = {
-    get(state, prop) {
+    get(state2, prop) {
       if (prop === DRAFT_STATE)
-        return state;
-      const source = latest(state);
+        return state2;
+      const source = latest(state2);
       if (!has(source, prop)) {
-        return readPropFromProto(state, source, prop);
+        return readPropFromProto(state2, source, prop);
       }
       const value = source[prop];
-      if (state.finalized_ || !isDraftable(value)) {
+      if (state2.finalized_ || !isDraftable(value)) {
         return value;
       }
-      if (value === peek(state.base_, prop)) {
-        prepareCopy(state);
-        return state.copy_[prop] = createProxy(value, state);
+      if (value === peek(state2.base_, prop)) {
+        prepareCopy(state2);
+        return state2.copy_[prop] = createProxy(value, state2);
       }
       return value;
     },
-    has(state, prop) {
-      return prop in latest(state);
+    has(state2, prop) {
+      return prop in latest(state2);
     },
-    ownKeys(state) {
-      return Reflect.ownKeys(latest(state));
+    ownKeys(state2) {
+      return Reflect.ownKeys(latest(state2));
     },
-    set(state, prop, value) {
-      const desc = getDescriptorFromProto(latest(state), prop);
+    set(state2, prop, value) {
+      const desc = getDescriptorFromProto(latest(state2), prop);
       if (desc?.set) {
-        desc.set.call(state.draft_, value);
+        desc.set.call(state2.draft_, value);
         return true;
       }
-      if (!state.modified_) {
-        const current2 = peek(latest(state), prop);
+      if (!state2.modified_) {
+        const current2 = peek(latest(state2), prop);
         const currentState = current2?.[DRAFT_STATE];
         if (currentState && currentState.base_ === value) {
-          state.copy_[prop] = value;
-          state.assigned_[prop] = false;
+          state2.copy_[prop] = value;
+          state2.assigned_[prop] = false;
           return true;
         }
-        if (is(value, current2) && (value !== void 0 || has(state.base_, prop)))
+        if (is(value, current2) && (value !== void 0 || has(state2.base_, prop)))
           return true;
-        prepareCopy(state);
-        markChanged(state);
+        prepareCopy(state2);
+        markChanged(state2);
       }
-      if (state.copy_[prop] === value && // special case: handle new props with value 'undefined'
-      (value !== void 0 || prop in state.copy_) || // special case: NaN
-      Number.isNaN(value) && Number.isNaN(state.copy_[prop]))
+      if (state2.copy_[prop] === value && // special case: handle new props with value 'undefined'
+      (value !== void 0 || prop in state2.copy_) || // special case: NaN
+      Number.isNaN(value) && Number.isNaN(state2.copy_[prop]))
         return true;
-      state.copy_[prop] = value;
-      state.assigned_[prop] = true;
+      state2.copy_[prop] = value;
+      state2.assigned_[prop] = true;
       return true;
     },
-    deleteProperty(state, prop) {
-      if (peek(state.base_, prop) !== void 0 || prop in state.base_) {
-        state.assigned_[prop] = false;
-        prepareCopy(state);
-        markChanged(state);
+    deleteProperty(state2, prop) {
+      if (peek(state2.base_, prop) !== void 0 || prop in state2.base_) {
+        state2.assigned_[prop] = false;
+        prepareCopy(state2);
+        markChanged(state2);
       } else {
-        delete state.assigned_[prop];
+        delete state2.assigned_[prop];
       }
-      if (state.copy_) {
-        delete state.copy_[prop];
+      if (state2.copy_) {
+        delete state2.copy_[prop];
       }
       return true;
     },
     // Note: We never coerce `desc.value` into an Immer draft, because we can't make
     // the same guarantee in ES5 mode.
-    getOwnPropertyDescriptor(state, prop) {
-      const owner = latest(state);
+    getOwnPropertyDescriptor(state2, prop) {
+      const owner = latest(state2);
       const desc = Reflect.getOwnPropertyDescriptor(owner, prop);
       if (!desc)
         return desc;
       return {
         writable: true,
-        configurable: state.type_ !== 1 || prop !== "length",
+        configurable: state2.type_ !== 1 || prop !== "length",
         enumerable: desc.enumerable,
         value: owner[prop]
       };
@@ -1578,8 +1578,8 @@
     defineProperty() {
       die(11);
     },
-    getPrototypeOf(state) {
-      return getPrototypeOf(state.base_);
+    getPrototypeOf(state2) {
+      return getPrototypeOf(state2.base_);
     },
     setPrototypeOf() {
       die(12);
@@ -1592,27 +1592,27 @@
       return fn.apply(this, arguments);
     };
   });
-  arrayTraps.deleteProperty = function(state, prop) {
+  arrayTraps.deleteProperty = function(state2, prop) {
     if (isNaN(parseInt(prop)))
       die(13);
-    return arrayTraps.set.call(this, state, prop, void 0);
+    return arrayTraps.set.call(this, state2, prop, void 0);
   };
-  arrayTraps.set = function(state, prop, value) {
+  arrayTraps.set = function(state2, prop, value) {
     if (prop !== "length" && isNaN(parseInt(prop)))
       die(14);
-    return objectTraps.set.call(this, state[0], prop, value, state[0]);
+    return objectTraps.set.call(this, state2[0], prop, value, state2[0]);
   };
   function peek(draft, prop) {
-    const state = draft[DRAFT_STATE];
-    const source = state ? latest(state) : draft;
+    const state2 = draft[DRAFT_STATE];
+    const source = state2 ? latest(state2) : draft;
     return source[prop];
   }
-  function readPropFromProto(state, source, prop) {
+  function readPropFromProto(state2, source, prop) {
     const desc = getDescriptorFromProto(source, prop);
     return desc ? `value` in desc ? desc.value : (
       // This is a very special case, if the prop is a getter defined by the
       // prototype, we should invoke it with the draft as context!
-      desc.get?.call(state.draft_)
+      desc.get?.call(state2.draft_)
     ) : void 0;
   }
   function getDescriptorFromProto(source, prop) {
@@ -1627,19 +1627,19 @@
     }
     return void 0;
   }
-  function markChanged(state) {
-    if (!state.modified_) {
-      state.modified_ = true;
-      if (state.parent_) {
-        markChanged(state.parent_);
+  function markChanged(state2) {
+    if (!state2.modified_) {
+      state2.modified_ = true;
+      if (state2.parent_) {
+        markChanged(state2.parent_);
       }
     }
   }
-  function prepareCopy(state) {
-    if (!state.copy_) {
-      state.copy_ = shallowCopy(
-        state.base_,
-        state.scope_.immer_.useStrictShallowCopy_
+  function prepareCopy(state2) {
+    if (!state2.copy_) {
+      state2.copy_ = shallowCopy(
+        state2.base_,
+        state2.scope_.immer_.useStrictShallowCopy_
       );
     }
   }
@@ -1697,7 +1697,7 @@
       };
       this.produceWithPatches = (base, recipe) => {
         if (typeof base === "function") {
-          return (state, ...args) => this.produceWithPatches(state, (draft) => base(draft, ...args));
+          return (state2, ...args) => this.produceWithPatches(state2, (draft) => base(draft, ...args));
         }
         let patches, inversePatches;
         const result = this.produce(base, recipe, (p, ip) => {
@@ -1725,10 +1725,10 @@
       return proxy;
     }
     finishDraft(draft, patchListener) {
-      const state = draft && draft[DRAFT_STATE];
-      if (!state || !state.isManual_)
+      const state2 = draft && draft[DRAFT_STATE];
+      if (!state2 || !state2.isManual_)
         die(9);
-      const { scope_: scope } = state;
+      const { scope_: scope } = state2;
       usePatchesInScope(scope, patchListener);
       return processResult(void 0, scope);
     }
@@ -1796,15 +1796,15 @@
   function currentImpl(value) {
     if (!isDraftable(value) || isFrozen(value))
       return value;
-    const state = value[DRAFT_STATE];
+    const state2 = value[DRAFT_STATE];
     let copy;
     let strict = true;
-    if (state) {
-      if (!state.modified_)
-        return state.base_;
-      state.finalized_ = true;
-      copy = shallowCopy(value, state.scope_.immer_.useStrictShallowCopy_);
-      strict = state.scope_.immer_.shouldUseStrictIteration();
+    if (state2) {
+      if (!state2.modified_)
+        return state2.base_;
+      state2.finalized_ = true;
+      copy = shallowCopy(value, state2.scope_.immer_.useStrictShallowCopy_);
+      strict = state2.scope_.immer_.shouldUseStrictIteration();
     } else {
       copy = shallowCopy(value, true);
     }
@@ -1815,8 +1815,8 @@
       },
       strict
     );
-    if (state) {
-      state.finalized_ = false;
+    if (state2) {
+      state2.finalized_ = false;
     }
     return copy;
   }
@@ -1837,30 +1837,30 @@
     const REPLACE = "replace";
     const ADD = "add";
     const REMOVE = "remove";
-    function generatePatches_(state, basePath, patches, inversePatches) {
-      switch (state.type_) {
+    function generatePatches_(state2, basePath, patches, inversePatches) {
+      switch (state2.type_) {
         case 0:
         case 2:
           return generatePatchesFromAssigned(
-            state,
+            state2,
             basePath,
             patches,
             inversePatches
           );
         case 1:
-          return generateArrayPatches(state, basePath, patches, inversePatches);
+          return generateArrayPatches(state2, basePath, patches, inversePatches);
         case 3:
           return generateSetPatches(
-            state,
+            state2,
             basePath,
             patches,
             inversePatches
           );
       }
     }
-    function generateArrayPatches(state, basePath, patches, inversePatches) {
-      let { base_, assigned_ } = state;
-      let copy_ = state.copy_;
+    function generateArrayPatches(state2, basePath, patches, inversePatches) {
+      let { base_, assigned_ } = state2;
+      let copy_ = state2.copy_;
       if (copy_.length < base_.length) {
         ;
         [base_, copy_] = [copy_, base_];
@@ -1901,9 +1901,9 @@
         });
       }
     }
-    function generatePatchesFromAssigned(state, basePath, patches, inversePatches) {
-      const { base_, copy_ } = state;
-      each(state.assigned_, (key, assignedValue) => {
+    function generatePatchesFromAssigned(state2, basePath, patches, inversePatches) {
+      const { base_, copy_ } = state2;
+      each(state2.assigned_, (key, assignedValue) => {
         const origValue = get(base_, key);
         const value = get(copy_, key);
         const op = !assignedValue ? REMOVE : has(base_, key) ? REPLACE : ADD;
@@ -1916,8 +1916,8 @@
         );
       });
     }
-    function generateSetPatches(state, basePath, patches, inversePatches) {
-      let { base_, copy_ } = state;
+    function generateSetPatches(state2, basePath, patches, inversePatches) {
+      let { base_, copy_ } = state2;
       let i = 0;
       base_.forEach((value) => {
         if (!copy_.has(value)) {
@@ -2070,22 +2070,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   enablePatches();
@@ -2096,14 +2096,14 @@
     getItems(filter) {
       return __awaiter7(this, void 0, void 0, function* () {
         if (Array.isArray(filter)) {
-          const { items } = yield this.messageBus.sendAsync("OBR_SCENE_ITEMS_GET_ITEMS", { ids: filter });
-          return items;
+          const { items: items2 } = yield this.messageBus.sendAsync("OBR_SCENE_ITEMS_GET_ITEMS", { ids: filter });
+          return items2;
         } else if (filter) {
-          const { items } = yield this.messageBus.sendAsync("OBR_SCENE_ITEMS_GET_ALL_ITEMS", {});
-          return items.filter(filter);
+          const { items: items2 } = yield this.messageBus.sendAsync("OBR_SCENE_ITEMS_GET_ALL_ITEMS", {});
+          return items2.filter(filter);
         } else {
-          const { items } = yield this.messageBus.sendAsync("OBR_SCENE_ITEMS_GET_ALL_ITEMS", {});
-          return items;
+          const { items: items2 } = yield this.messageBus.sendAsync("OBR_SCENE_ITEMS_GET_ALL_ITEMS", {});
+          return items2;
         }
       });
     }
@@ -2112,13 +2112,13 @@
     }
     updateItems(filterOrItems, update) {
       return __awaiter7(this, void 0, void 0, function* () {
-        let items;
+        let items2;
         if (this.isItemArray(filterOrItems)) {
-          items = filterOrItems;
+          items2 = filterOrItems;
         } else {
-          items = yield this.getItems(filterOrItems);
+          items2 = yield this.getItems(filterOrItems);
         }
-        const [nextState, patches] = produceWithPatches(items, update);
+        const [nextState, patches] = produceWithPatches(items2, update);
         const nextUpdates = nextState.map((item) => ({
           id: item.id,
           type: item.type
@@ -2141,10 +2141,10 @@
         });
       });
     }
-    addItems(items) {
+    addItems(items2) {
       return __awaiter7(this, void 0, void 0, function* () {
         yield this.messageBus.sendAsync("OBR_SCENE_ITEMS_ADD_ITEMS", {
-          items
+          items: items2
         });
       });
     }
@@ -2157,8 +2157,8 @@
     }
     getItemAttachments(ids) {
       return __awaiter7(this, void 0, void 0, function* () {
-        const { items } = yield this.messageBus.sendAsync("OBR_SCENE_ITEMS_GET_ITEM_ATTACHMENTS", { ids });
-        return items;
+        const { items: items2 } = yield this.messageBus.sendAsync("OBR_SCENE_ITEMS_GET_ITEM_ATTACHMENTS", { ids });
+        return items2;
       });
     }
     getItemBounds(ids) {
@@ -2191,22 +2191,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   enablePatches();
@@ -2217,14 +2217,14 @@
     getItems(filter) {
       return __awaiter8(this, void 0, void 0, function* () {
         if (Array.isArray(filter)) {
-          const { items } = yield this.messageBus.sendAsync("OBR_SCENE_LOCAL_GET_ITEMS", { ids: filter });
-          return items;
+          const { items: items2 } = yield this.messageBus.sendAsync("OBR_SCENE_LOCAL_GET_ITEMS", { ids: filter });
+          return items2;
         } else if (filter) {
-          const { items } = yield this.messageBus.sendAsync("OBR_SCENE_LOCAL_GET_ALL_ITEMS", {});
-          return items.filter(filter);
+          const { items: items2 } = yield this.messageBus.sendAsync("OBR_SCENE_LOCAL_GET_ALL_ITEMS", {});
+          return items2.filter(filter);
         } else {
-          const { items } = yield this.messageBus.sendAsync("OBR_SCENE_LOCAL_GET_ALL_ITEMS", {});
-          return items;
+          const { items: items2 } = yield this.messageBus.sendAsync("OBR_SCENE_LOCAL_GET_ALL_ITEMS", {});
+          return items2;
         }
       });
     }
@@ -2233,13 +2233,13 @@
     }
     updateItems(filterOrItems, update, fastUpdate) {
       return __awaiter8(this, void 0, void 0, function* () {
-        let items;
+        let items2;
         if (this.isItemArray(filterOrItems)) {
-          items = filterOrItems;
+          items2 = filterOrItems;
         } else {
-          items = yield this.getItems(filterOrItems);
+          items2 = yield this.getItems(filterOrItems);
         }
-        const [nextState, patches] = produceWithPatches(items, update);
+        const [nextState, patches] = produceWithPatches(items2, update);
         const nextUpdates = nextState.map((item) => ({
           id: item.id,
           type: item.type
@@ -2263,10 +2263,10 @@
         });
       });
     }
-    addItems(items) {
+    addItems(items2) {
       return __awaiter8(this, void 0, void 0, function* () {
         yield this.messageBus.sendAsync("OBR_SCENE_LOCAL_ADD_ITEMS", {
-          items
+          items: items2
         });
       });
     }
@@ -2279,8 +2279,8 @@
     }
     getItemAttachments(ids) {
       return __awaiter8(this, void 0, void 0, function* () {
-        const { items } = yield this.messageBus.sendAsync("OBR_SCENE_LOCAL_GET_ITEM_ATTACHMENTS", { ids });
-        return items;
+        const { items: items2 } = yield this.messageBus.sendAsync("OBR_SCENE_LOCAL_GET_ITEM_ATTACHMENTS", { ids });
+        return items2;
       });
     }
     getItemBounds(ids) {
@@ -2313,22 +2313,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var SceneApi = class {
@@ -2403,22 +2403,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var ContextMenuApi = class {
@@ -2464,22 +2464,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var ToolApi = class {
@@ -2800,22 +2800,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var PopoverApi = class {
@@ -2867,22 +2867,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var ModalApi = class {
@@ -2912,22 +2912,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var ActionApi = class {
@@ -3045,22 +3045,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   enablePatches();
@@ -3100,22 +3100,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var PartyApi = class {
@@ -3152,22 +3152,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var RoomApi = class {
@@ -3229,22 +3229,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var ThemeApi = class {
@@ -3281,22 +3281,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var AssetsApi = class {
@@ -3344,22 +3344,22 @@
     return new (P || (P = Promise))(function(resolve, reject) {
       function fulfilled(value) {
         try {
-          step(generator.next(value));
+          step2(generator.next(value));
         } catch (e) {
           reject(e);
         }
       }
       function rejected(value) {
         try {
-          step(generator["throw"](value));
+          step2(generator["throw"](value));
         } catch (e) {
           reject(e);
         }
       }
-      function step(result) {
+      function step2(result) {
         result.done ? resolve(result.value) : adopt(result.value).then(fulfilled, rejected);
       }
-      step((generator = generator.apply(thisArg, _arguments || [])).next());
+      step2((generator = generator.apply(thisArg, _arguments || [])).next());
     });
   };
   var BroadcastApi = class {
@@ -3539,6 +3539,97 @@
   };
   var lib_default = OBR;
 
+  // src/shared/hp.ts
+  function hpBand(state2) {
+    if (state2.hp <= 0) return "down";
+    if (state2.hp <= state2.maxHp / 2) return "bloodied";
+    return "healthy";
+  }
+
+  // src/shared/names.ts
+  function matchKey(name) {
+    return name.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]/g, "");
+  }
+
+  // src/shared/turns.ts
+  var EMPTY_COMBAT = { round: 0, turn: null, party: null, members: [], init: {}, held: [] };
+  var monsterId = (creature) => `m:${matchKey(creature)}`;
+  var pcId = (name) => `p:${matchKey(name)}`;
+  function buildEntries(monsters, pcTokens, state2) {
+    const byId = /* @__PURE__ */ new Map();
+    const held = new Set(state2.held);
+    const make = (id, kind, name, mod) => ({
+      id,
+      kind,
+      name,
+      mod,
+      init: typeof state2.init[id] === "number" ? state2.init[id] : null,
+      held: held.has(id),
+      down: false,
+      tokens: []
+    });
+    for (const t of monsters) {
+      const id = monsterId(t.creature);
+      const entry = byId.get(id) ?? make(id, "monster", t.creature, t.mod);
+      entry.tokens.push({ id: t.id, hp: t.hp, maxHp: t.maxHp, visible: t.visible });
+      byId.set(id, entry);
+    }
+    for (const e of byId.values()) e.down = e.tokens.every((t) => (t.hp ?? 1) <= 0);
+    for (const name of state2.members) {
+      const id = pcId(name);
+      if (!byId.has(id)) byId.set(id, make(id, "pc", name, 0));
+    }
+    for (const t of pcTokens) {
+      const id = pcId(t.pc);
+      const entry = byId.get(id) ?? make(id, "pc", t.pc, 0);
+      entry.tokens.push({ id: t.id, visible: t.visible });
+      byId.set(id, entry);
+    }
+    return [...byId.values()].sort(compareEntries);
+  }
+  function compareEntries(a, b) {
+    if (a.init === null || b.init === null) {
+      if (a.init !== b.init) return a.init === null ? 1 : -1;
+    } else if (a.init !== b.init) return b.init - a.init;
+    if (a.kind !== b.kind) return a.kind === "monster" ? -1 : 1;
+    if (a.mod !== b.mod) return b.mod - a.mod;
+    return a.name.localeCompare(b.name);
+  }
+  function acting(entries2) {
+    return entries2.filter((e) => e.init !== null && !e.held && !e.down);
+  }
+  function step(entries2, state2, dir) {
+    const order2 = acting(entries2);
+    if (!order2.length) return { turn: null, round: state2.round };
+    if (state2.round === 0 || state2.turn === null) return { turn: order2[0].id, round: 1 };
+    let idx = order2.findIndex((e) => e.id === state2.turn);
+    if (idx === -1) {
+      const all = entries2.findIndex((e) => e.id === state2.turn);
+      const after = all === -1 ? -1 : order2.findIndex((e) => entries2.indexOf(e) > all);
+      if (dir === 1) {
+        if (after === -1) return { turn: order2[0].id, round: state2.round + 1 };
+        return { turn: order2[after].id, round: state2.round };
+      }
+      idx = after === -1 ? order2.length : after;
+    }
+    let next = idx + dir;
+    let round = state2.round;
+    if (next >= order2.length) {
+      next = 0;
+      round++;
+    } else if (next < 0) {
+      next = order2.length - 1;
+      round = Math.max(1, round - 1);
+    }
+    return { turn: order2[next].id, round };
+  }
+  function displayName(e) {
+    return e.kind === "monster" && e.tokens.length > 1 ? `${e.name} \xD7${e.tokens.length}` : e.name;
+  }
+  function rollD20(random = Math.random) {
+    return 1 + Math.floor(random() * 20);
+  }
+
   // src/shared/protocol.ts
   var DEFAULT_PORT = 27190;
 
@@ -3547,7 +3638,64 @@
   var TOKEN_KEY = `${EXT_ID}/creature`;
   var LABEL_KEY = `${EXT_ID}/hp-label`;
   var MENU_ID = `${EXT_ID}/menu`;
+  var PC_KEY = `${EXT_ID}/pc`;
+  var COMBAT_KEY = `${EXT_ID}/combat`;
+  var ORDER_KEY = `${EXT_ID}/order`;
+  var RING_KEY = `${EXT_ID}/turn-ring`;
+  function readCreature(metadata) {
+    const c = metadata[TOKEN_KEY];
+    return c && typeof c.name === "string" ? c : null;
+  }
+  function readPc(metadata) {
+    const pc = metadata[PC_KEY];
+    return pc && typeof pc.name === "string" ? pc.name : null;
+  }
+  function readCombat(metadata) {
+    const c = metadata[COMBAT_KEY];
+    return { ...EMPTY_COMBAT, ...c ?? {} };
+  }
+  function readOrder(metadata) {
+    return metadata[ORDER_KEY] ?? null;
+  }
+  function combatTokens(items2) {
+    const monsters = [];
+    const pcs = [];
+    for (const item of items2) {
+      const c = readCreature(item.metadata);
+      if (c) {
+        monsters.push({ id: item.id, creature: c.name, mod: c.init, hp: c.hp, maxHp: c.maxHp, visible: item.visible });
+        continue;
+      }
+      const pc = readPc(item.metadata);
+      if (pc) pcs.push({ id: item.id, pc, visible: item.visible });
+    }
+    return { monsters, pcs };
+  }
   var PORT_KEY = "obsidian-bestiary:port";
+  var PARTIES_KEY = "obsidian-bestiary:parties";
+  var LAST_PARTY_KEY = "obsidian-bestiary:last-party";
+  function loadParties() {
+    try {
+      const raw = localStorage.getItem(PARTIES_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+  function getLastParty() {
+    try {
+      return localStorage.getItem(LAST_PARTY_KEY);
+    } catch {
+      return null;
+    }
+  }
+  function setLastParty(name) {
+    try {
+      if (name) localStorage.setItem(LAST_PARTY_KEY, name);
+      else localStorage.removeItem(LAST_PARTY_KEY);
+    } catch {
+    }
+  }
   function getPort() {
     try {
       const p = Number(localStorage.getItem(PORT_KEY));
@@ -3590,54 +3738,250 @@
 
   // src/extension/popover.ts
   var root = document.getElementById("app");
+  var role = "PLAYER";
   var status = null;
+  var parties = loadParties();
+  var partyError = "";
+  var state = { ...EMPTY_COMBAT };
+  var items = [];
+  var order = null;
+  var formOpen = null;
+  var confirmEnd = false;
+  var lastPartyApplied = false;
+  var esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  var ICON = {
+    eye: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>`,
+    eyeOff: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.6 5.1A10.4 10.4 0 0 1 12 5c6.5 0 10 7 10 7a17.6 17.6 0 0 1-2.2 3.2M6.6 6.6C3.7 8.4 2 12 2 12s3.5 7 10 7a9.8 9.8 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><path d="M2 2l20 20"/></svg>`,
+    dice: `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 2l9 5v10l-9 5-9-5V7z"/><path d="M12 22V12M21 7l-9 5-9-5"/></svg>`
+  };
   var channel = openChannel((msg) => {
     if (msg.type === "status") {
       status = msg.status;
       render();
+    } else if (msg.type === "parties") {
+      parties = msg.parties;
+      partyError = msg.error ?? "";
+      if (!msg.error && formOpen) formOpen = null;
+      void syncPartyMembers();
+      render();
     }
   });
-  var esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-  function describe(s) {
-    if (!s) return { cls: "pending", title: "Starting\u2026", detail: "" };
-    switch (s.state) {
-      case "player":
-        return { cls: "idle", title: "GM only", detail: "This extension only does things for the GM." };
-      case "connected":
-        return {
-          cls: s.error ? "warn" : "ok",
-          title: `Connected to \u201C${esc(s.vault ?? "")}\u201D`,
-          detail: s.error ? esc(s.error) : `${s.creatures ?? 0} creatures${s.syncedAt ? ` \xB7 synced ${new Date(s.syncedAt).toLocaleTimeString()}` : ""}`
-        };
-      case "connecting":
-        return { cls: "pending", title: "Connecting to Obsidian\u2026", detail: "" };
-      default:
-        return {
-          cls: "fail",
-          title: "Not connected to Obsidian",
-          detail: `${esc(s.error ?? "")}. Is Obsidian open with Owlbear Bestiary Bridge enabled?${s.creatures ? ` Using the saved bestiary (${s.creatures} creatures).` : ""}`
-        };
+  var entries = () => {
+    const { monsters, pcs } = combatTokens(items);
+    return buildEntries(monsters, pcs, state);
+  };
+  async function save(next) {
+    state = { ...state, ...next };
+    await lib_default.scene.setMetadata({ [COMBAT_KEY]: state });
+    render();
+  }
+  var findParty = (name) => parties?.parties.find((p) => p.name === name);
+  async function syncPartyMembers() {
+    if (role !== "GM") return;
+    if (state.party) {
+      const party = findParty(state.party);
+      if (party && JSON.stringify(party.members) !== JSON.stringify(state.members)) await save({ members: party.members });
+      return;
+    }
+    const last = getLastParty();
+    if (!lastPartyApplied && last && findParty(last)) {
+      lastPartyApplied = true;
+      await choose(last);
     }
   }
+  async function choose(partyName) {
+    const party = findParty(partyName);
+    setLastParty(party ? party.name : null);
+    await save({ party: party?.name ?? null, members: party?.members ?? [] });
+  }
+  async function selectTokens(entry) {
+    const ids = entry?.tokens.map((t) => t.id) ?? [];
+    if (ids.length) await lib_default.player.select(ids, true);
+  }
+  async function move(dir) {
+    const list = entries();
+    const next = step(list, state, dir);
+    await save(next);
+    await selectTokens(list.find((e) => e.id === next.turn));
+  }
+  async function rollMissing() {
+    const init = { ...state.init };
+    for (const e of entries()) if (e.kind === "monster" && e.init === null) init[e.id] = rollD20() + e.mod;
+    await save({ init });
+  }
+  var renderQueued = false;
   function render() {
-    const d = describe(status);
-    root.innerHTML = `
-    <h1>Obsidian Bestiary</h1>
-    <div class="status ${d.cls}"><span class="dot"></span><div><div class="title">${d.title}</div><div class="detail">${d.detail}</div></div></div>
-    ${status?.state === "player" ? "" : `<div class="buttons">
-      <button id="reconnect" type="button">Reconnect</button>
-      <button id="refresh" type="button" ${status?.state === "connected" ? "" : "disabled"}>Refresh bestiary</button>
+    const active = document.activeElement;
+    if (active && root.contains(active) && active.tagName === "INPUT") {
+      renderQueued = true;
+      return;
+    }
+    renderQueued = false;
+    root.innerHTML = role === "GM" ? gmHtml() : playerHtml();
+    if (role === "GM") wireGm();
+  }
+  document.addEventListener("focusout", () => setTimeout(() => renderQueued && render(), 0));
+  function playerHtml() {
+    const list = order?.entries ?? [];
+    return `
+    <header><h1>Initiative</h1>${order && order.round > 0 ? `<span class="round">Round ${order.round}</span>` : ""}</header>
+    ${list.length ? `<ol class="public">${list.map((e) => `<li class="${e.active ? "active" : ""}">${esc(e.name)}</li>`).join("")}</ol>` : `<p class="help">No turn order yet.</p>`}`;
+  }
+  function connDot() {
+    const s = status;
+    const cls = !s ? "pending" : s.state === "connected" ? s.error ? "warn" : "ok" : s.state === "offline" ? "fail" : "pending";
+    const title = s?.state === "connected" ? `Connected to ${s.vault} \xB7 ${s.creatures ?? 0} creatures` : s?.state === "offline" ? `Not connected to Obsidian: ${s.error ?? ""}` : "Connecting to Obsidian\u2026";
+    return `<span class="conn ${cls}" title="${esc(title)}"></span>`;
+  }
+  function partyOptions() {
+    const list = parties?.parties ?? [];
+    const group = (label, src) => {
+      const opts = list.filter((p) => p.source === src);
+      return opts.length ? `<optgroup label="${label}">${opts.map((p) => `<option value="${esc(p.name)}" ${p.name === state.party ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</optgroup>` : "";
+    };
+    return `<option value="" ${state.party ? "" : "selected"}>No party</option>${group("Initiative Tracker", "initiative-tracker")}${group("Made in Owlbear", "bridge")}`;
+  }
+  function rowHtml(e) {
+    const cls = [e.kind, e.id === state.turn && state.round > 0 ? "active" : "", e.held ? "held" : "", e.down ? "down" : ""].filter(Boolean).join(" ");
+    const hps = e.kind === "monster" ? `<span class="hps">${e.tokens.slice(0, 6).map((t) => `<span class="chip ${hpBand({ hp: t.hp ?? 0, maxHp: t.maxHp ?? 1 })}" title="${t.hp}/${t.maxHp}">${t.hp}</span>`).join("")}${e.tokens.length > 6 ? "\u2026" : ""}</span>` : `<span class="tag">PC${e.tokens.length ? "" : " \xB7 no token"}</span>`;
+    return `
+    <li class="${cls}" data-id="${esc(e.id)}">
+      <input class="init" type="number" inputmode="numeric" value="${e.init ?? ""}" placeholder="\u2013" aria-label="Initiative for ${esc(e.name)}">
+      <button class="name" type="button" title="Select on the map">${esc(displayName(e))}</button>
+      ${hps}
+      ${e.kind === "monster" ? `<button class="icon reroll" type="button" title="Roll d20 ${e.mod >= 0 ? "+" : ""}${e.mod}">${ICON.dice}</button>` : `<span class="icon-spacer"></span>`}
+      <button class="icon hold" type="button" title="${e.held ? "Not in combat yet: click to join" : "In combat: click to hold back"}">${e.held ? ICON.eyeOff : ICON.eye}</button>
+    </li>`;
+  }
+  function gmHtml() {
+    const list = entries();
+    const started = state.round > 0;
+    const party = findParty(state.party);
+    const s = status;
+    return `
+    <header><h1>Turn order</h1>${connDot()}${started ? `<span class="round">Round ${state.round}</span>` : ""}</header>
+    <div class="bar">
+      <select id="party" aria-label="Party">${partyOptions()}</select>
+      <button id="new-party" type="button" title="New party">New</button>
+      ${party?.source === "bridge" ? `<button id="edit-party" type="button" title="Edit party">Edit</button>` : ""}
     </div>
-    <p class="help">Right-click a token \u2192 <b>Statblock &amp; HP</b> to link it to a creature. Selecting a linked token opens it in Obsidian's Creature pane.</p>
-    <details>
-      <summary>Connection settings</summary>
+    ${formOpen ? partyFormHtml() : ""}
+    <div class="bar">
+      <button id="roll" type="button" title="Roll for monsters without a number">Roll</button>
+      ${started ? `<button id="prev" type="button" title="Previous turn">\u25C0</button>` : ""}
+      <button id="next" class="primary" type="button">${started ? "Next \u25B6" : "Start"}</button>
+      ${started || Object.keys(state.init).length ? `<button id="end" type="button">${confirmEnd ? "End combat?" : "End"}</button>` : ""}
+    </div>
+    ${list.length ? `<ol class="order">${list.map(rowHtml).join("")}</ol>` : `<p class="help">Link tokens (right-click \u2192 <b>Statblock &amp; HP</b>) or pick a party to build the order.</p>`}
+    <details class="conn-details">
+      <summary>Connection</summary>
+      <p class="help">${s?.state === "connected" ? `Connected to \u201C${esc(s.vault ?? "")}\u201D \xB7 ${s.creatures ?? 0} creatures${s.syncedAt ? ` \xB7 synced ${new Date(s.syncedAt).toLocaleTimeString()}` : ""}${s.error ? `<br>${esc(s.error)}` : ""}${(s.protocol ?? 1) < 2 ? "<br>Update Owlbear Bestiary Bridge in Obsidian to use parties." : ""}` : s?.state === "offline" ? `Not connected: ${esc(s.error ?? "")}. Is Obsidian open with Owlbear Bestiary Bridge enabled?` : "Connecting\u2026"}</p>
+      <div class="bar">
+        <button id="reconnect" type="button">Reconnect</button>
+        <button id="refresh" type="button" ${s?.state === "connected" ? "" : "disabled"}>Refresh bestiary</button>
+      </div>
       <label>Port <input id="port" type="number" min="1024" max="65535" value="${getPort()}"></label>
-      <button id="save-port" type="button">Save</button>
-      <p class="help">Must match the port in the Owlbear Bestiary Bridge plugin settings.</p>
-    </details>`}`;
-    document.getElementById("reconnect")?.addEventListener("click", () => channel.post({ type: "reconnect" }));
-    document.getElementById("refresh")?.addEventListener("click", () => channel.post({ type: "refresh-bestiary" }));
-    document.getElementById("save-port")?.addEventListener("click", () => {
+      <button id="save-port" type="button">Save port</button>
+    </details>`;
+  }
+  function partyFormHtml() {
+    const editing = formOpen?.editing ? findParty(formOpen.editing) : void 0;
+    const members = new Set(editing?.members ?? []);
+    const known = [.../* @__PURE__ */ new Set([...parties?.pcs ?? [], ...members])].sort((a, b) => a.localeCompare(b));
+    return `
+    <form id="party-form" class="party-form">
+      <input id="party-name" type="text" placeholder="Party name" value="${esc(editing?.name ?? "")}" ${editing ? "readonly" : ""}>
+      <div class="members">${known.length ? known.map(
+      (n) => `<label class="member"><input type="checkbox" value="${esc(n)}" ${members.has(n) ? "checked" : ""}> ${esc(n)}</label>`
+    ).join("") : `<span class="help">No PCs known yet: add names below.</span>`}</div>
+      <input id="party-extra" type="text" placeholder="More names, comma separated">
+      ${partyError ? `<div class="error">${esc(partyError)}</div>` : ""}
+      <div class="bar">
+        <button type="submit" class="primary">Save</button>
+        <button id="party-cancel" type="button">Cancel</button>
+        ${editing ? `<button id="party-delete" type="button">Delete</button>` : ""}
+      </div>
+    </form>`;
+  }
+  function wireGm() {
+    const on = (id, fn) => document.getElementById(id)?.addEventListener("click", fn);
+    document.getElementById("party")?.addEventListener("change", (e) => void choose(e.target.value));
+    on("new-party", () => {
+      formOpen = { editing: null };
+      partyError = "";
+      render();
+    });
+    on("edit-party", () => {
+      formOpen = { editing: state.party };
+      partyError = "";
+      render();
+    });
+    on("party-cancel", () => {
+      formOpen = null;
+      render();
+    });
+    on("party-delete", () => {
+      if (formOpen?.editing) channel.post({ type: "delete-party", name: formOpen.editing });
+      void choose("");
+    });
+    document.getElementById("party-form")?.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = document.getElementById("party-name").value.trim();
+      const checked = [...document.querySelectorAll(".member input:checked")].map((i) => i.value);
+      const extra = document.getElementById("party-extra").value.split(",").map((s) => s.trim()).filter(Boolean);
+      if (!name) {
+        partyError = "Give the party a name";
+        render();
+        return;
+      }
+      channel.post({ type: "save-party", name, members: [...checked, ...extra] });
+      setLastParty(name);
+      lastPartyApplied = false;
+      void save({ party: name, members: [.../* @__PURE__ */ new Set([...checked, ...extra])] });
+    });
+    on("roll", () => void rollMissing());
+    on("next", () => void move(1));
+    on("prev", () => void move(-1));
+    on("end", () => {
+      if (!confirmEnd) {
+        confirmEnd = true;
+        render();
+        setTimeout(() => {
+          confirmEnd = false;
+          render();
+        }, 4e3);
+        return;
+      }
+      confirmEnd = false;
+      void save({ round: 0, turn: null, init: {}, held: [] });
+    });
+    const list = entries();
+    root.querySelectorAll("ol.order li").forEach((li) => {
+      const entry = list.find((e) => e.id === li.dataset.id);
+      if (!entry) return;
+      const input = li.querySelector("input.init");
+      const commit = () => {
+        const init = { ...state.init };
+        const value = input.value.trim();
+        if (value === "") delete init[entry.id];
+        else if (Number.isFinite(Number(value))) init[entry.id] = Math.trunc(Number(value));
+        else return;
+        if (init[entry.id] !== state.init[entry.id]) void save({ init });
+      };
+      input.addEventListener("change", commit);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") input.blur();
+      });
+      li.querySelector(".name")?.addEventListener("click", () => void selectTokens(entry));
+      li.querySelector(".reroll")?.addEventListener("click", () => void save({ init: { ...state.init, [entry.id]: rollD20() + entry.mod } }));
+      li.querySelector(".hold")?.addEventListener("click", () => {
+        const held = entry.held ? state.held.filter((id) => id !== entry.id) : [...state.held, entry.id];
+        void save({ held });
+      });
+    });
+    on("reconnect", () => channel.post({ type: "reconnect" }));
+    on("refresh", () => channel.post({ type: "refresh-bestiary" }));
+    on("save-port", () => {
       const port = Number(document.getElementById("port").value);
       if (!Number.isInteger(port) || port < 1024 || port > 65535) return;
       setPort(port);
@@ -3645,8 +3989,39 @@
     });
   }
   render();
-  lib_default.onReady(() => {
+  lib_default.onReady(async () => {
     void followTheme();
-    channel.post({ type: "get-status" });
+    role = await lib_default.player.getRole();
+    void lib_default.action.setWidth(360).catch(() => void 0);
+    void lib_default.action.setHeight(role === "GM" ? 560 : 320).catch(() => void 0);
+    const load = async () => {
+      const metadata = await lib_default.scene.getMetadata();
+      state = readCombat(metadata);
+      order = readOrder(metadata);
+      if (role === "GM") items = await lib_default.scene.items.getItems();
+      render();
+    };
+    lib_default.scene.onMetadataChange((metadata) => {
+      state = readCombat(metadata);
+      order = readOrder(metadata);
+      render();
+    });
+    lib_default.scene.onReadyChange((ready) => ready && void load());
+    if (role === "GM") {
+      lib_default.scene.items.onChange((next) => {
+        items = next;
+        render();
+      });
+      channel.post({ type: "get-status" });
+      channel.post({ type: "get-parties" });
+    }
+    lib_default.player.onChange((p) => {
+      if (p.role !== role) {
+        role = p.role;
+        void load();
+      }
+    });
+    if (await lib_default.scene.isReady()) await load();
+    await syncPartyMembers();
   });
 })();

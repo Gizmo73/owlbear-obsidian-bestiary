@@ -3485,6 +3485,69 @@
     }
   };
 
+  // node_modules/@owlbear-rodeo/sdk/lib/builders/ShapeBuilder.js
+  var ShapeBuilder = class extends GenericItemBuilder {
+    constructor(player) {
+      super(player);
+      this._width = 0;
+      this._height = 0;
+      this._shapeType = "RECTANGLE";
+      this._style = {
+        fillColor: "black",
+        fillOpacity: 1,
+        strokeColor: "white",
+        strokeOpacity: 1,
+        strokeWidth: 5,
+        strokeDash: []
+      };
+      this._item.layer = "DRAWING";
+      this._item.name = "Shape";
+    }
+    width(width) {
+      this._width = width;
+      return this.self();
+    }
+    height(height) {
+      this._height = height;
+      return this.self();
+    }
+    shapeType(shapeType) {
+      this._shapeType = shapeType;
+      return this.self();
+    }
+    style(style) {
+      this._style = style;
+      return this.self();
+    }
+    fillColor(fillColor) {
+      this._style.fillColor = fillColor;
+      return this.self();
+    }
+    fillOpacity(fillOpacity) {
+      this._style.fillOpacity = fillOpacity;
+      return this.self();
+    }
+    strokeColor(strokeColor) {
+      this._style.strokeColor = strokeColor;
+      return this.self();
+    }
+    strokeOpacity(strokeOpacity) {
+      this._style.strokeOpacity = strokeOpacity;
+      return this.self();
+    }
+    strokeWidth(strokeWidth) {
+      this._style.strokeWidth = strokeWidth;
+      return this.self();
+    }
+    strokeDash(strokeDash) {
+      this._style.strokeDash = strokeDash;
+      return this.self();
+    }
+    build() {
+      return Object.assign(Object.assign({}, this._item), { type: "SHAPE", width: this._width, height: this._height, shapeType: this._shapeType, style: this._style });
+    }
+  };
+
   // node_modules/@owlbear-rodeo/sdk/lib/builders/TextBuilder.js
   var TextBuilder = class extends GenericItemBuilder {
     constructor(player) {
@@ -3751,6 +3814,9 @@
     /** True if the current site is embedded in an instance of Owlbear Rodeo */
     isAvailable: Boolean(details.origin)
   };
+  function buildShape() {
+    return new ShapeBuilder(playerApi);
+  }
   function buildText() {
     return new TextBuilder(playerApi);
   }
@@ -3817,8 +3883,63 @@
     return i === needle.length;
   }
 
+  // src/shared/turns.ts
+  var EMPTY_COMBAT = { round: 0, turn: null, party: null, members: [], init: {}, held: [] };
+  var monsterId = (creature) => `m:${matchKey(creature)}`;
+  var pcId = (name) => `p:${matchKey(name)}`;
+  function buildEntries(monsters, pcTokens, state) {
+    const byId = /* @__PURE__ */ new Map();
+    const held = new Set(state.held);
+    const make = (id, kind, name, mod) => ({
+      id,
+      kind,
+      name,
+      mod,
+      init: typeof state.init[id] === "number" ? state.init[id] : null,
+      held: held.has(id),
+      down: false,
+      tokens: []
+    });
+    for (const t of monsters) {
+      const id = monsterId(t.creature);
+      const entry = byId.get(id) ?? make(id, "monster", t.creature, t.mod);
+      entry.tokens.push({ id: t.id, hp: t.hp, maxHp: t.maxHp, visible: t.visible });
+      byId.set(id, entry);
+    }
+    for (const e of byId.values()) e.down = e.tokens.every((t) => (t.hp ?? 1) <= 0);
+    for (const name of state.members) {
+      const id = pcId(name);
+      if (!byId.has(id)) byId.set(id, make(id, "pc", name, 0));
+    }
+    for (const t of pcTokens) {
+      const id = pcId(t.pc);
+      const entry = byId.get(id) ?? make(id, "pc", t.pc, 0);
+      entry.tokens.push({ id: t.id, visible: t.visible });
+      byId.set(id, entry);
+    }
+    return [...byId.values()].sort(compareEntries);
+  }
+  function compareEntries(a, b) {
+    if (a.init === null || b.init === null) {
+      if (a.init !== b.init) return a.init === null ? 1 : -1;
+    } else if (a.init !== b.init) return b.init - a.init;
+    if (a.kind !== b.kind) return a.kind === "monster" ? -1 : 1;
+    if (a.mod !== b.mod) return b.mod - a.mod;
+    return a.name.localeCompare(b.name);
+  }
+  function displayName(e) {
+    return e.kind === "monster" && e.tokens.length > 1 ? `${e.name} \xD7${e.tokens.length}` : e.name;
+  }
+  function publicOrder(entries, state) {
+    return {
+      round: state.round,
+      entries: entries.filter((e) => e.init !== null && !e.held && !e.down).filter((e) => e.kind === "pc" || e.tokens.some((t) => t.visible)).map((e) => ({ name: displayName(e), active: e.id === state.turn }))
+    };
+  }
+
   // src/shared/protocol.ts
-  var PROTOCOL_VERSION = 1;
+  var PROTOCOL_VERSION = 2;
+  var MIN_PROTOCOL_VERSION = 1;
   var DEFAULT_PORT = 27190;
 
   // src/extension/bridge.ts
@@ -3895,10 +4016,8 @@
         this.failures = 0;
         try {
           const welcome = await this.request({ kind: "hello", protocol: PROTOCOL_VERSION, player: this.player() });
-          if (welcome.protocol !== PROTOCOL_VERSION) {
-            this.handlers.onDisconnected(
-              `version mismatch: update ${welcome.protocol > PROTOCOL_VERSION ? "the extension" : "the Obsidian plugin"}`
-            );
+          if (welcome.protocol < MIN_PROTOCOL_VERSION) {
+            this.handlers.onDisconnected("the Obsidian plugin is too old: update Owlbear Bestiary Bridge");
             ws.close();
             return;
           }
@@ -3953,13 +4072,57 @@
   var TOKEN_KEY = `${EXT_ID}/creature`;
   var LABEL_KEY = `${EXT_ID}/hp-label`;
   var MENU_ID = `${EXT_ID}/menu`;
+  var PC_KEY = `${EXT_ID}/pc`;
+  var COMBAT_KEY = `${EXT_ID}/combat`;
+  var ORDER_KEY = `${EXT_ID}/order`;
+  var RING_KEY = `${EXT_ID}/turn-ring`;
   var asset = (file) => new URL(file, location.href).href;
   function readCreature(metadata) {
     const c = metadata[TOKEN_KEY];
     return c && typeof c.name === "string" ? c : null;
   }
+  function readPc(metadata) {
+    const pc = metadata[PC_KEY];
+    return pc && typeof pc.name === "string" ? pc.name : null;
+  }
+  function readCombat(metadata) {
+    const c = metadata[COMBAT_KEY];
+    return { ...EMPTY_COMBAT, ...c ?? {} };
+  }
+  function readOrder(metadata) {
+    return metadata[ORDER_KEY] ?? null;
+  }
+  function combatTokens(items) {
+    const monsters = [];
+    const pcs = [];
+    for (const item of items) {
+      const c = readCreature(item.metadata);
+      if (c) {
+        monsters.push({ id: item.id, creature: c.name, mod: c.init, hp: c.hp, maxHp: c.maxHp, visible: item.visible });
+        continue;
+      }
+      const pc = readPc(item.metadata);
+      if (pc) pcs.push({ id: item.id, pc, visible: item.visible });
+    }
+    return { monsters, pcs };
+  }
   var INDEX_KEY = "obsidian-bestiary:index";
   var PORT_KEY = "obsidian-bestiary:port";
+  var PARTIES_KEY = "obsidian-bestiary:parties";
+  function loadParties() {
+    try {
+      const raw = localStorage.getItem(PARTIES_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  }
+  function saveParties(parties2) {
+    try {
+      localStorage.setItem(PARTIES_KEY, JSON.stringify(parties2));
+    } catch {
+    }
+  }
   function loadIndex() {
     try {
       const raw = localStorage.getItem(INDEX_KEY);
@@ -4087,10 +4250,40 @@
     }
   }
 
+  // src/extension/rings.ts
+  var RING_COLOR = "#ffd54a";
+  async function showRings(tokenIds) {
+    const wanted = new Set(tokenIds);
+    const rings = await lib_default.scene.local.getItems((item) => !!item.metadata[RING_KEY]);
+    const have = /* @__PURE__ */ new Set();
+    const stale = [];
+    for (const ring of rings) {
+      const parent = ring.attachedTo ?? "";
+      if (wanted.has(parent) && !have.has(parent)) have.add(parent);
+      else stale.push(ring.id);
+    }
+    if (stale.length) await lib_default.scene.local.deleteItems(stale);
+    const missing = [...wanted].filter((id) => !have.has(id));
+    if (!missing.length) return;
+    const present = new Set((await lib_default.scene.items.getItems(missing)).map((i) => i.id));
+    const dpi = await lib_default.scene.grid.getDpi();
+    const created = [];
+    for (const id of missing) {
+      if (!present.has(id)) continue;
+      const b = await lib_default.scene.items.getItemBounds([id]);
+      const size = Math.max(b.width, b.height) * 1.12;
+      created.push(
+        buildShape().shapeType("CIRCLE").width(size).height(size).position(b.center).strokeColor(RING_COLOR).strokeOpacity(0.95).strokeWidth(Math.max(3, Math.round(dpi * 0.04))).fillOpacity(0).attachedTo(id).layer("ATTACHMENT").locked(true).disableHit(true).disableAttachmentBehavior(["ROTATION", "SCALE"]).metadata({ [RING_KEY]: true }).build()
+      );
+    }
+    if (created.length) await lib_default.scene.local.addItems(created);
+  }
+
   // src/extension/background.ts
   var status = { state: "connecting", port: getPort() };
   var index = loadIndex();
   var search = index ? new BestiarySearch(index.creatures) : null;
+  var parties = loadParties();
   var bridge = null;
   var playerName = "";
   var gmStarted = false;
@@ -4116,6 +4309,16 @@
       case "show":
         void showInObsidian(msg.name);
         break;
+      case "get-parties":
+        channel.post({ type: "parties", parties });
+        void fetchParties();
+        break;
+      case "save-party":
+        void partyRequest({ kind: "saveParty", name: msg.name, members: msg.members });
+        break;
+      case "delete-party":
+        void partyRequest({ kind: "deleteParty", name: msg.name });
+        break;
       default:
         break;
     }
@@ -4131,6 +4334,33 @@
       setStatus({ creatures: index.creatures.length, syncedAt: index.savedAt });
     } catch (err) {
       setStatus({ error: `could not load bestiary: ${err.message}` });
+    }
+  }
+  var partiesSupported = () => !!bridge?.connected && (status.protocol ?? 1) >= 2;
+  async function fetchParties() {
+    if (!partiesSupported()) return;
+    try {
+      parties = await bridge.request({ kind: "getParties" });
+      saveParties(parties);
+      channel.post({ type: "parties", parties });
+    } catch {
+    }
+  }
+  async function partyRequest(req) {
+    if (!partiesSupported()) {
+      channel.post({
+        type: "parties",
+        parties,
+        error: bridge?.connected ? "Update Owlbear Bestiary Bridge in Obsidian to save parties" : "Connect to Obsidian to save parties"
+      });
+      return;
+    }
+    try {
+      parties = await bridge.request(req);
+      saveParties(parties);
+      channel.post({ type: "parties", parties });
+    } catch (err) {
+      channel.post({ type: "parties", parties, error: err.message });
     }
   }
   async function showInObsidian(name) {
@@ -4156,13 +4386,35 @@
       if (c) return c.name;
     }
     const only = items.length === 1 ? items[0] : null;
-    if (!only || only.layer !== "CHARACTER" || !search) return null;
+    if (!only || only.layer !== "CHARACTER" || !search || readPc(only.metadata)) return null;
     const label = isImage(only) ? only.text?.plainText ?? "" : "";
     for (const candidate of nameCandidates({ name: only.name, label })) {
       const hit = search.find(candidate);
       if (hit) return hit.name;
     }
     return null;
+  }
+  var combatQueued = false;
+  function queueCombatUpdate() {
+    if (combatQueued) return;
+    combatQueued = true;
+    setTimeout(() => {
+      combatQueued = false;
+      void updateCombat().catch((err) => console.warn("[obsidian-bestiary] turn order update failed", err));
+    }, 80);
+  }
+  async function updateCombat() {
+    if (!await lib_default.scene.isReady()) return;
+    const metadata = await lib_default.scene.getMetadata();
+    const state = readCombat(metadata);
+    const { monsters, pcs } = combatTokens(await lib_default.scene.items.getItems());
+    const entries = buildEntries(monsters, pcs, state);
+    const order = publicOrder(entries, state);
+    if (JSON.stringify(order) !== JSON.stringify(readOrder(metadata))) {
+      await lib_default.scene.setMetadata({ [ORDER_KEY]: order });
+    }
+    const active = state.round > 0 ? entries.find((e) => e.id === state.turn) : void 0;
+    await showRings(active ? active.tokens.map((t) => t.id) : []);
   }
   async function createMenu() {
     await lib_default.contextMenu.create({
@@ -4185,22 +4437,29 @@
       onConnected: (welcome) => {
         setStatus({
           state: "connected",
+          protocol: welcome.protocol,
           vault: welcome.vault,
           creatures: index?.creatures.length ?? welcome.creatureCount,
           syncedAt: index?.savedAt,
           error: welcome.statblocksPlugin ? void 0 : "Fantasy Statblocks isn't enabled in Obsidian"
         });
         if (!index || index.version !== welcome.bestiaryVersion || index.vault !== welcome.vault) void fetchBestiary();
+        void fetchParties();
       },
       onDisconnected: (error) => setStatus({ state: "offline", error }),
       onPush: (push) => {
         if (push.push === "bestiaryChanged" && push.version !== index?.version) void fetchBestiary();
+        if (push.push === "partiesChanged") void fetchParties();
       }
     });
     bridge.start();
     startLabels();
     lib_default.player.onChange((player) => void onSelection(player.selection));
     void lib_default.player.getSelection().then(onSelection);
+    lib_default.scene.items.onChange(queueCombatUpdate);
+    lib_default.scene.onMetadataChange(queueCombatUpdate);
+    lib_default.scene.onReadyChange((ready) => ready && queueCombatUpdate());
+    queueCombatUpdate();
   }
   lib_default.onReady(async () => {
     playerName = await lib_default.player.getName();

@@ -3750,7 +3750,7 @@ function startBridgeServer(opts) {
 }
 
 // src/shared/protocol.ts
-var PROTOCOL_VERSION = 1;
+var PROTOCOL_VERSION = 2;
 var DEFAULT_PORT = 27190;
 var EXTENSION_ORIGINS = ["https://gizmo73.github.io"];
 
@@ -3801,7 +3801,7 @@ function matchKey(name) {
 }
 
 // src/plugin/main.ts
-var DEFAULTS = { port: DEFAULT_PORT, showOnSelect: true };
+var DEFAULTS = { port: DEFAULT_PORT, showOnSelect: true, parties: [] };
 var OwlbearBestiaryBridge = class extends import_obsidian.Plugin {
   constructor() {
     super(...arguments);
@@ -3815,7 +3815,7 @@ var OwlbearBestiaryBridge = class extends import_obsidian.Plugin {
     __publicField(this, "byKey", /* @__PURE__ */ new Map());
   }
   async onload() {
-    this.settings = { ...DEFAULTS, ...await this.loadData() };
+    this.settings = { ...DEFAULTS, parties: [], ...await this.loadData() };
     this.statusEl = this.addStatusBarItem();
     this.addSettingTab(new BridgeSettingTab(this.app, this));
     const rebuild = (0, import_obsidian.debounce)(() => this.rebuildIndex(true), 1500, true);
@@ -3898,6 +3898,12 @@ var OwlbearBestiaryBridge = class extends import_obsidian.Plugin {
         const result = { shown: this.settings.showOnSelect ? await this.showCreature(req.name) : null };
         return result;
       }
+      case "getParties":
+        return this.parties();
+      case "saveParty":
+        return this.saveParty(req.name, req.members);
+      case "deleteParty":
+        return this.deleteParty(req.name);
       default:
         throw new Error(`unknown request "${req.kind}"`);
     }
@@ -3939,6 +3945,55 @@ var OwlbearBestiaryBridge = class extends import_obsidian.Plugin {
     else if (fs?.openCreatureView) await (await fs.openCreatureView()).render(creature);
     else return null;
     return exact;
+  }
+  // ------------------------------------------------------------ parties
+  /** Initiative Tracker's live data if it's loaded, else its saved data.json. */
+  async initiativeTrackerData() {
+    const plugins = this.app.plugins;
+    const live = plugins.getPlugin("initiative-tracker")?.data;
+    if (live) return live;
+    try {
+      const path = `${this.app.vault.configDir}/plugins/initiative-tracker/data.json`;
+      return JSON.parse(await this.app.vault.adapter.read(path));
+    } catch {
+      return null;
+    }
+  }
+  async parties() {
+    const it = await this.initiativeTrackerData();
+    const fromTracker = (it?.parties ?? []).map((p) => ({
+      name: p.name,
+      members: p.players ?? [],
+      source: "initiative-tracker"
+    }));
+    const own = this.settings.parties.map((p) => ({ ...p, source: "bridge" }));
+    const pcs = /* @__PURE__ */ new Set([
+      ...(it?.players ?? []).filter((p) => p.player !== false && p.name).map((p) => p.name),
+      ...fromTracker.flatMap((p) => p.members),
+      ...own.flatMap((p) => p.members)
+    ]);
+    return { parties: [...fromTracker, ...own], pcs: [...pcs].sort((a, b) => a.localeCompare(b)) };
+  }
+  async saveParty(name, members) {
+    const clean = name.trim();
+    if (!clean) throw new Error("the party needs a name");
+    const it = await this.initiativeTrackerData();
+    if (it?.parties?.some((p) => p.name === clean)) {
+      throw new Error(`"${clean}" is an Initiative Tracker party: pick another name`);
+    }
+    const list = [...new Set(members.map((m) => m.trim()).filter(Boolean))];
+    const existing = this.settings.parties.find((p) => p.name === clean);
+    if (existing) existing.members = list;
+    else this.settings.parties.push({ name: clean, members: list });
+    await this.saveSettings();
+    this.server?.broadcast({ push: "partiesChanged" });
+    return this.parties();
+  }
+  async deleteParty(name) {
+    this.settings.parties = this.settings.parties.filter((p) => p.name !== name);
+    await this.saveSettings();
+    this.server?.broadcast({ push: "partiesChanged" });
+    return this.parties();
   }
   // ------------------------------------------------------------ status
   renderStatus() {

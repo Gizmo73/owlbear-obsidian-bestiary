@@ -24,9 +24,10 @@
     items: [],
     local: [],
     menus: {},
+    sceneMeta: {},
     log: [],
   };
-  const subs = { player: new Set(), items: new Set(), local: new Set() };
+  const subs = { player: new Set(), items: new Set(), local: new Set(), meta: new Set() };
   const frames = {};
 
   const clone = (x) => JSON.parse(JSON.stringify(x));
@@ -56,6 +57,20 @@
     OBR_PLAYER_GET_SELECTION: () => ({ selection: state.selection }),
     OBR_PLAYER_GET_ID: () => ({ id: "user-1" }),
     OBR_PLAYER_SUBSCRIBE: (d, src) => { subs.player.add(src); },
+    OBR_PLAYER_SELECT: (d) => {
+      state.selection = d.replace ? [...d.items] : [...new Set([...state.selection, ...d.items])];
+      queueMicrotask(() => emit(subs.player, "OBR_PLAYER_EVENT_CHANGE", { player: player() }));
+      return {};
+    },
+    OBR_SCENE_GET_METADATA: () => ({ metadata: state.sceneMeta }),
+    OBR_SCENE_SET_METADATA: (d) => {
+      Object.assign(state.sceneMeta, clone(d.update));
+      queueMicrotask(() => emit(subs.meta, "OBR_SCENE_METADATA_EVENT_CHANGE", { metadata: state.sceneMeta }));
+      return {};
+    },
+    OBR_SCENE_METADATA_SUBSCRIBE: (d, src) => { subs.meta.add(src); },
+    OBR_ACTION_SET_WIDTH: () => ({}),
+    OBR_ACTION_SET_HEIGHT: () => ({}),
     OBR_SCENE_IS_READY: () => ({ ready: true }),
     OBR_SCENE_READY_SUBSCRIBE: () => undefined,
     OBR_SCENE_GRID_GET_DPI: () => ({ dpi: 150 }),
@@ -120,6 +135,11 @@
     select(ids) {
       state.selection = ids;
       emit(subs.player, "OBR_PLAYER_EVENT_CHANGE", { player: player() });
+    },
+    /** Change items as another client would, then fire the change event. */
+    editItems(fn) {
+      fn(state.items);
+      emit(subs.items, "OBR_SCENE_ITEMS_EVENT_CHANGE", { items: state.items });
     },
   };
 })();

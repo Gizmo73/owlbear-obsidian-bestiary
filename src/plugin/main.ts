@@ -8,6 +8,8 @@ import {
   EXTENSION_ORIGINS,
   PROTOCOL_VERSION,
   type BestiaryPayload,
+  type PartiesPayload,
+  type Party,
   type Push,
   type Request,
   type ShowResult,
@@ -37,9 +39,17 @@ declare global {
 interface Settings {
   port: number;
   showOnSelect: boolean;
+  /** Parties made in Owlbear (Initiative Tracker's own parties are read, never written). */
+  parties: { name: string; members: string[] }[];
 }
 
-const DEFAULTS: Settings = { port: DEFAULT_PORT, showOnSelect: true };
+const DEFAULTS: Settings = { port: DEFAULT_PORT, showOnSelect: true, parties: [] };
+
+/** The bits of Initiative Tracker's saved data we read. */
+interface InitiativeTrackerData {
+  parties?: { name: string; players?: string[] }[];
+  players?: { name: string; player?: boolean }[];
+}
 
 export default class OwlbearBestiaryBridge extends Plugin {
   settings: Settings = { ...DEFAULTS };
@@ -52,7 +62,7 @@ export default class OwlbearBestiaryBridge extends Plugin {
   private byKey = new Map<string, string>();
 
   async onload() {
-    this.settings = { ...DEFAULTS, ...((await this.loadData()) as Partial<Settings> | null) };
+    this.settings = { ...DEFAULTS, parties: [], ...((await this.loadData()) as Partial<Settings> | null) };
     this.statusEl = this.addStatusBarItem();
     this.addSettingTab(new BridgeSettingTab(this.app, this));
 
@@ -146,6 +156,12 @@ export default class OwlbearBestiaryBridge extends Plugin {
         const result: ShowResult = { shown: this.settings.showOnSelect ? await this.showCreature(req.name) : null };
         return result;
       }
+      case "getParties":
+        return this.parties();
+      case "saveParty":
+        return this.saveParty(req.name, req.members);
+      case "deleteParty":
+        return this.deleteParty(req.name);
       default:
         throw new Error(`unknown request "${(req as { kind?: string }).kind}"`);
     }
@@ -190,6 +206,60 @@ export default class OwlbearBestiaryBridge extends Plugin {
     else if (fs?.openCreatureView) await (await fs.openCreatureView()).render(creature);
     else return null;
     return exact;
+  }
+
+  // ------------------------------------------------------------ parties
+
+  /** Initiative Tracker's live data if it's loaded, else its saved data.json. */
+  private async initiativeTrackerData(): Promise<InitiativeTrackerData | null> {
+    const plugins = (this.app as unknown as { plugins: { getPlugin(id: string): unknown } }).plugins;
+    const live = (plugins.getPlugin("initiative-tracker") as { data?: InitiativeTrackerData } | null)?.data;
+    if (live) return live;
+    try {
+      const path = `${this.app.vault.configDir}/plugins/initiative-tracker/data.json`;
+      return JSON.parse(await this.app.vault.adapter.read(path)) as InitiativeTrackerData;
+    } catch {
+      return null;
+    }
+  }
+
+  async parties(): Promise<PartiesPayload> {
+    const it = await this.initiativeTrackerData();
+    const fromTracker: Party[] = (it?.parties ?? []).map((p) => ({
+      name: p.name,
+      members: p.players ?? [],
+      source: "initiative-tracker",
+    }));
+    const own: Party[] = this.settings.parties.map((p) => ({ ...p, source: "bridge" }));
+    const pcs = new Set<string>([
+      ...(it?.players ?? []).filter((p) => p.player !== false && p.name).map((p) => p.name),
+      ...fromTracker.flatMap((p) => p.members),
+      ...own.flatMap((p) => p.members),
+    ]);
+    return { parties: [...fromTracker, ...own], pcs: [...pcs].sort((a, b) => a.localeCompare(b)) };
+  }
+
+  private async saveParty(name: string, members: string[]): Promise<PartiesPayload> {
+    const clean = name.trim();
+    if (!clean) throw new Error("the party needs a name");
+    const it = await this.initiativeTrackerData();
+    if (it?.parties?.some((p) => p.name === clean)) {
+      throw new Error(`"${clean}" is an Initiative Tracker party: pick another name`);
+    }
+    const list = [...new Set(members.map((m) => m.trim()).filter(Boolean))];
+    const existing = this.settings.parties.find((p) => p.name === clean);
+    if (existing) existing.members = list;
+    else this.settings.parties.push({ name: clean, members: list });
+    await this.saveSettings();
+    this.server?.broadcast({ push: "partiesChanged" } satisfies Push);
+    return this.parties();
+  }
+
+  private async deleteParty(name: string): Promise<PartiesPayload> {
+    this.settings.parties = this.settings.parties.filter((p) => p.name !== name);
+    await this.saveSettings();
+    this.server?.broadcast({ push: "partiesChanged" } satisfies Push);
+    return this.parties();
   }
 
   // ------------------------------------------------------------ status

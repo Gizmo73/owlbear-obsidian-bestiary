@@ -10,24 +10,38 @@ Two parts work together:
   shares your [Fantasy Statblocks](https://github.com/javalent/fantasy-statblocks) bestiary
   with the extension over a local connection (`127.0.0.1`, port 27190).
 
-## What it does (v0.1)
+## What it does
 
+**Tokens, statblocks and HP**
 - **Link tokens to statblocks**: right-click one or more tokens → *Statblock & HP* →
   search your bestiary (pre-filled from the token name, so "Goblin 2" finds Goblin) → Enter.
-  Every selected token gets its own HP from the statblock.
+  Every selected token gets its own HP from the statblock. Party PCs show up in the same
+  search, so PC tokens can be linked too (initiative only, no HP).
 - **Track HP**: right-click linked tokens and type `7` (damage), `+5` (heal), `=20` (set)
   or `max 30`. It applies to every selected token, so AoE damage is one step. HP can go
   below 0, and healing stops at max.
-- **GM-only HP labels** under linked tokens (green / amber when bloodied / red at 0 or below).
-  Players never receive them; they only see token positions.
+- **GM-only HP text** above linked tokens (green / amber when bloodied / red at 0 or below).
 - **Creature pane follows your selection**: click a token in Owlbear and its statblock
   opens in Fantasy Statblocks' Creature pane in Obsidian. Spell `[[wikilinks]]` work as usual.
-  Unlinked tokens whose name matches a creature open too.
-- Keeps working if Obsidian disconnects: the extension saves a copy of the bestiary list.
-  Only the Creature pane needs the live connection.
 
-Planned next: turn order (parties, shared initiative per creature type, Next turn
-highlights the token and opens its statblock), then loading encounters.
+**Turn order** (toolbar icon → panel)
+- Pick a party: Initiative Tracker's parties are listed, and you can make new ones in the
+  panel (saved in the bridge plugin's settings). The last party is remembered.
+- *Roll* gives each creature type one shared roll (d20 + Dex), shown as one row ("Goblin ×3").
+  Type the PCs' rolls; any number can be edited. Ties go to monsters.
+- *Start* / *Next* / *Previous*: the active token(s) get a gold ring (only you see it), are
+  selected so you can move them straight away, and their statblock opens in the Creature pane.
+  Rounds are counted. Clicking a row selects its tokens too.
+- The eye button holds a creature back (not in combat yet): it's skipped and players don't see it.
+  Monsters at 0 HP or below are greyed out and skipped.
+- **Players** see the same panel as a plain list: names and whose turn it is, never HP.
+  Held, downed and hidden-on-the-map monsters are left out.
+
+Players otherwise only see token positions: HP text and turn rings are local to your browser.
+The extension keeps a copy of the bestiary and parties, so linking, HP and turns keep working
+if Obsidian disconnects; only the Creature pane needs the live connection.
+
+Planned next: loading encounters (saved Initiative Tracker encounters and `encounter` blocks).
 
 ## Install
 
@@ -44,7 +58,7 @@ web viewer (tested with Obsidian 1.13.7).
    `https://gizmo73.github.io/owlbear-obsidian-bestiary/manifest.json`, then enable it
    in your room.
 
-The toolbar icon opens a status panel (connection, bestiary sync, port).
+The toolbar icon opens the turn-order panel; connection details are at the bottom of it.
 
 ## Development
 

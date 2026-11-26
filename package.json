@@ -1,7 +1,7 @@
 {
   "name": "owlbear-obsidian-bestiary",
   "private": true,
-  "version": "0.1.2",
+  "version": "0.2.0",
   "description": "Owlbear Rodeo extension (Obsidian Bestiary) + Obsidian plugin (Owlbear Bestiary Bridge)",
   "type": "module",
   "scripts": {
