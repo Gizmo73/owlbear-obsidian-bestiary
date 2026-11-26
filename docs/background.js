@@ -3886,27 +3886,46 @@
   // src/shared/turns.ts
   var EMPTY_COMBAT = { round: 0, turn: null, party: null, members: [], init: {}, held: [] };
   var monsterId = (creature) => `m:${matchKey(creature)}`;
+  var tokenEntryId = (tokenId) => `t:${tokenId}`;
   var pcId = (name) => `p:${matchKey(name)}`;
+  function monsterName(creature, n, siblings) {
+    return siblings > 1 && n ? `${creature} ${n}` : creature;
+  }
+  function nextNumbers(used, count) {
+    const taken = new Set(used);
+    const out = [];
+    for (let n = 1; out.length < count; n++) if (!taken.has(n)) out.push(n);
+    return out;
+  }
   function buildEntries(monsters, pcTokens, state) {
     const byId = /* @__PURE__ */ new Map();
     const held = new Set(state.held);
-    const make = (id, kind, name, mod) => ({
+    const initOf = (...ids) => {
+      for (const id of ids) if (typeof state.init[id] === "number") return state.init[id];
+      return null;
+    };
+    const make = (id, kind, name, mod, group = id) => ({
       id,
       kind,
       name,
+      group,
       mod,
-      init: typeof state.init[id] === "number" ? state.init[id] : null,
-      held: held.has(id),
+      // Monsters fall back to their group's roll (how 0.2.0 stored it).
+      init: initOf(id, group),
+      held: held.has(id) || held.has(group),
       down: false,
       tokens: []
     });
+    const siblings = /* @__PURE__ */ new Map();
+    for (const t of monsters) siblings.set(monsterId(t.creature), (siblings.get(monsterId(t.creature)) ?? 0) + 1);
     for (const t of monsters) {
-      const id = monsterId(t.creature);
-      const entry = byId.get(id) ?? make(id, "monster", t.creature, t.mod);
+      const group = monsterId(t.creature);
+      const id = tokenEntryId(t.id);
+      const entry = make(id, "monster", monsterName(t.creature, t.n, siblings.get(group)), t.mod, group);
       entry.tokens.push({ id: t.id, hp: t.hp, maxHp: t.maxHp, visible: t.visible });
+      entry.down = t.hp <= 0;
       byId.set(id, entry);
     }
-    for (const e of byId.values()) e.down = e.tokens.every((t) => (t.hp ?? 1) <= 0);
     for (const name of state.members) {
       const id = pcId(name);
       if (!byId.has(id)) byId.set(id, make(id, "pc", name, 0));
@@ -3925,10 +3944,10 @@
     } else if (a.init !== b.init) return b.init - a.init;
     if (a.kind !== b.kind) return a.kind === "monster" ? -1 : 1;
     if (a.mod !== b.mod) return b.mod - a.mod;
-    return a.name.localeCompare(b.name);
+    return a.name.localeCompare(b.name, void 0, { numeric: true });
   }
   function displayName(e) {
-    return e.kind === "monster" && e.tokens.length > 1 ? `${e.name} \xD7${e.tokens.length}` : e.name;
+    return e.name;
   }
   function publicOrder(entries, state) {
     return {
@@ -4098,7 +4117,7 @@
     for (const item of items) {
       const c = readCreature(item.metadata);
       if (c) {
-        monsters.push({ id: item.id, creature: c.name, mod: c.init, hp: c.hp, maxHp: c.maxHp, visible: item.visible });
+        monsters.push({ id: item.id, creature: c.name, n: c.n, mod: c.init, hp: c.hp, maxHp: c.maxHp, visible: item.visible });
         continue;
       }
       const pc = readPc(item.metadata);
@@ -4157,10 +4176,12 @@
   // src/extension/labels.ts
   var HP_COLORS = { healthy: "#7ee081", bloodied: "#ffc04d", down: "#ff6b6b" };
   var FONT_PER_DPI = 24 / 150;
-  function infoFor(token) {
+  function infoFor(token, siblings) {
     const c = readCreature(token.metadata);
     if (!c) return null;
-    return { text: `${c.hp}/${c.maxHp}`, color: HP_COLORS[hpBand(c)], fit: `${token.scale.x},${token.scale.y}` };
+    const hp = `${c.hp}/${c.maxHp}`;
+    const text = (siblings.get(c.name) ?? 0) > 1 && c.n ? `#${c.n} ${hp}` : hp;
+    return { text, color: HP_COLORS[hpBand(c)], fit: `${token.scale.x},${token.scale.y}` };
   }
   var fitOf = (label) => label.metadata[LABEL_KEY]?.fit ?? "";
   var scheduled = false;
@@ -4203,9 +4224,14 @@
     if (!await lib_default.scene.isReady()) return;
     const tokens = await lib_default.scene.items.getItems((item) => readCreature(item.metadata) !== null);
     const labels = await lib_default.scene.local.getItems((item) => !!item.metadata[LABEL_KEY]);
+    const siblings = /* @__PURE__ */ new Map();
+    for (const token of tokens) {
+      const name = readCreature(token.metadata).name;
+      siblings.set(name, (siblings.get(name) ?? 0) + 1);
+    }
     const wanted = /* @__PURE__ */ new Map();
     for (const token of tokens) {
-      const info = infoFor(token);
+      const info = infoFor(token, siblings);
       if (info) wanted.set(token.id, { token, info });
     }
     const stale = [];
@@ -4241,7 +4267,7 @@
       const created = [];
       for (const { token, info } of missing) {
         const bounds = await lib_default.scene.items.getItemBounds([token.id]);
-        const boxWidth = Math.max(bounds.width, font * 5);
+        const boxWidth = Math.max(bounds.width, font * 7);
         created.push(
           buildText().textType("PLAIN").plainText(info.text).width(boxWidth).height(boxHeight).position({ x: bounds.center.x - boxWidth / 2, y: bounds.min.y - boxHeight }).attachedTo(token.id).textAlign("CENTER").textAlignVertical("BOTTOM").fontSize(font).fontWeight(700).fillColor(info.color).strokeColor("#000000").strokeOpacity(0.85).strokeWidth(Math.max(2, Math.round(font / 6))).locked(true).disableHit(true).disableAttachmentBehavior(["ROTATION", "SCALE"]).metadata({ [LABEL_KEY]: { fit: info.fit } }).build()
         );
@@ -4403,11 +4429,37 @@
       void updateCombat().catch((err) => console.warn("[obsidian-bestiary] turn order update failed", err));
     }, 80);
   }
+  async function fixNumbers(items) {
+    const byCreature = /* @__PURE__ */ new Map();
+    for (const item of items) {
+      const c = readCreature(item.metadata);
+      if (c) byCreature.set(c.name, [...byCreature.get(c.name) ?? [], item]);
+    }
+    const updates = /* @__PURE__ */ new Map();
+    for (const list of byCreature.values()) {
+      const seen = /* @__PURE__ */ new Set();
+      const needs = [];
+      for (const item of [...list].sort((a, b) => a.zIndex - b.zIndex)) {
+        const n = readCreature(item.metadata).n;
+        if (n && !seen.has(n)) seen.add(n);
+        else needs.push(item);
+      }
+      const fresh = nextNumbers(seen, needs.length);
+      needs.forEach((item, i) => updates.set(item.id, fresh[i]));
+    }
+    if (!updates.size) return false;
+    await lib_default.scene.items.updateItems([...updates.keys()], (drafts) => {
+      for (const d of drafts) d.metadata[TOKEN_KEY] = { ...readCreature(d.metadata), n: updates.get(d.id) };
+    });
+    return true;
+  }
   async function updateCombat() {
     if (!await lib_default.scene.isReady()) return;
+    const items = await lib_default.scene.items.getItems();
+    if (await fixNumbers(items)) return;
     const metadata = await lib_default.scene.getMetadata();
     const state = readCombat(metadata);
-    const { monsters, pcs } = combatTokens(await lib_default.scene.items.getItems());
+    const { monsters, pcs } = combatTokens(items);
     const entries = buildEntries(monsters, pcs, state);
     const order = publicOrder(entries, state);
     if (JSON.stringify(order) !== JSON.stringify(readOrder(metadata))) {

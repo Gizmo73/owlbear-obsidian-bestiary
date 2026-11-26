@@ -20,6 +20,8 @@ Two parts work together:
 - **Track HP**: right-click linked tokens and type `7` (damage), `+5` (heal), `=20` (set)
   or `max 30`. It applies to every selected token, so AoE damage is one step. HP can go
   below 0, and healing stops at max.
+- **Numbered tokens**: several of the same creature become Goblin 1, Goblin 2, … (copy-pasted
+  tokens get the next free number). The GM-only HP text shows the number too: `#2 5/7`.
 - **GM-only HP text** above linked tokens (green / amber when bloodied / red at 0 or below).
 - **Creature pane follows your selection**: click a token in Owlbear and its statblock
   opens in Fantasy Statblocks' Creature pane in Obsidian. Spell `[[wikilinks]]` work as usual.
@@ -27,11 +29,13 @@ Two parts work together:
 **Turn order** (toolbar icon → panel)
 - Pick a party: Initiative Tracker's parties are listed, and you can make new ones in the
   panel (saved in the bridge plugin's settings). The last party is remembered.
-- *Roll* gives each creature type one shared roll (d20 + Dex), shown as one row ("Goblin ×3").
+- Every token has its own row and turn, but *Roll* gives each creature type one shared roll
+  (d20 + Dex), so Goblin 1, 2 and 3 act back to back. A goblin added mid-fight joins their roll.
   Type the PCs' rolls; any number can be edited. Ties go to monsters.
-- *Start* / *Next* / *Previous*: the active token(s) get a gold ring (only you see it), are
+- Click a monster's HP in the panel to damage or heal it: `7`, `+5`, `=20` or `max 30`.
+- *Start* / *Next* / *Previous*: the active token gets a gold ring (only you see it), are
   selected so you can move them straight away, and their statblock opens in the Creature pane.
-  Rounds are counted. Clicking a row selects its tokens too.
+  Rounds are counted. Clicking a row's name selects its token too.
 - The eye button holds a creature back (not in combat yet): it's skipped and players don't see it.
   Monsters at 0 HP or below are greyed out and skipped.
 - **Players** see the same panel as a plain list: names and whose turn it is, never HP.

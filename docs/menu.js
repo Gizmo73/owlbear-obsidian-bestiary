@@ -3601,6 +3601,17 @@
     return name.trim().replace(/\s+(?:#?\d+|\(\d+\)|[A-Z]\d*)$/, "").trim();
   }
 
+  // src/shared/turns.ts
+  function monsterName(creature, n, siblings) {
+    return siblings > 1 && n ? `${creature} ${n}` : creature;
+  }
+  function nextNumbers(used, count) {
+    const taken = new Set(used);
+    const out = [];
+    for (let n = 1; out.length < count; n++) if (!taken.has(n)) out.push(n);
+    return out;
+  }
+
   // src/shared/search.ts
   var words = (s) => s.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
   var BestiarySearch = class {
@@ -3659,6 +3670,15 @@
   function readPc(metadata) {
     const pc = metadata[PC_KEY];
     return pc && typeof pc.name === "string" ? pc.name : null;
+  }
+  function usedNumbers(items2, creature, except = /* @__PURE__ */ new Set()) {
+    const out = [];
+    for (const item of items2) {
+      if (except.has(item.id)) continue;
+      const c = readCreature(item.metadata);
+      if (c && c.name === creature && c.n) out.push(c.n);
+    }
+    return out;
   }
   function creatureFromEntry(entry) {
     const max = entry.hp ?? 1;
@@ -3825,10 +3845,22 @@
       message = `Linked to ${result.name} (PC)`;
     } else {
       const creature = creatureFromEntry(result.entry);
+      const scene = await lib_default.scene.items.getItems();
+      const keep = /* @__PURE__ */ new Map();
+      for (const item of items) {
+        const c = readCreature(item.metadata);
+        if (c?.name === creature.name && c.n) keep.set(item.id, c.n);
+      }
+      const fresh = nextNumbers(
+        [...usedNumbers(scene, creature.name, new Set(ids)), ...keep.values()],
+        ids.length - keep.size
+      );
+      const numbers = new Map(ids.map((id) => [id, keep.get(id) ?? fresh.shift()]));
       await lib_default.scene.items.updateItems(ids, (drafts) => {
         for (const d of drafts) {
           delete d.metadata[PC_KEY];
-          d.metadata[TOKEN_KEY] = { ...creature };
+          const current2 = readCreature(d.metadata);
+          d.metadata[TOKEN_KEY] = current2?.name === creature.name ? { ...current2, n: numbers.get(d.id) } : { ...creature, n: numbers.get(d.id) };
         }
       });
       channel.post({ type: "show", name: result.entry.name });
@@ -3843,7 +3875,7 @@
     const rows = items.map((item) => ({ item, c: readCreature(item.metadata), pc: readPc(item.metadata) })).filter((r) => r.c || r.pc).slice(0, 4).map(
       ({ item, c, pc }) => c ? `
       <div class="row ${hpBand(c)}">
-        <span class="name">${esc(items.length === 1 ? c.name : tokenLabel(item))}</span>
+        <span class="name">${esc(items.length === 1 ? c.name : monsterName(c.name, c.n, 2))}</span>
         <span class="hpv">${c.hp}/${c.maxHp}</span>
       </div>` : `
       <div class="row">

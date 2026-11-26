@@ -64,11 +64,12 @@ const saved = fsData.monsters.map(([, m]) => S.toEntry(m)).filter(Boolean);
 eq(`all ${fsData.monsters.length} saved Fantasy Statblocks creatures index with numeric HP/AC`, saved.every((e) => Number.isInteger(e.hp) && Number.isInteger(e.ac)), true);
 
 // ------------------------------------------------------------ turn order
-const mon = (id, creature, mod, hp = 10, visible = true) => ({ id, creature, mod, hp, maxHp: 10, visible });
-const base = { ...S.EMPTY_COMBAT, members: ["Berald", "Dogg"], init: { "m:goblin": 12, "m:orc": 12, "p:berald": 12, "p:dogg": 5 } };
-let ents = S.buildEntries([mon("g1", "Goblin", 2), mon("g2", "Goblin", 2), mon("o1", "Orc", 1), mon("w1", "Wolf", 2)], [{ id: "t1", pc: "Berald", visible: true }], base);
-eq("grouped by creature, PCs from party + linked tokens", ents.map((e) => `${e.id}:${e.tokens.length}`), ["m:goblin:2", "m:orc:1", "p:berald:1", "p:dogg:0", "m:wolf:1"]);
-eq("display name counts tokens", ents.map(S.displayName), ["Goblin ×2", "Orc", "Berald", "Dogg", "Wolf"]);
+const mon = (id, creature, n, mod, hp = 10, visible = true) => ({ id, creature, n, mod, hp, maxHp: 10, visible });
+const base = { ...S.EMPTY_COMBAT, members: ["Berald", "Dogg"], init: { "t:g1": 12, "t:g2": 12, "t:o1": 12, "p:berald": 12, "p:dogg": 5 } };
+const scene = [mon("g2", "Goblin", 2, 2), mon("g1", "Goblin", 1, 2), mon("o1", "Orc", 1, 1), mon("w1", "Wolf", 1, 2)];
+let ents = S.buildEntries(scene, [{ id: "t1", pc: "Berald", visible: true }], base);
+eq("one entry per token, numbered when there are several", ents.map((e) => e.name), ["Goblin 1", "Goblin 2", "Orc", "Berald", "Dogg", "Wolf"]);
+eq("tokens of a creature share a group", ents.filter((e) => e.kind === "monster").map((e) => e.group), ["m:goblin", "m:goblin", "m:orc", "m:wolf"]);
 const run = (state, n) => {
   const seen = [];
   for (let i = 0; i < n; i++) {
@@ -77,21 +78,30 @@ const run = (state, n) => {
   }
   return seen;
 };
-eq("start then cycle; unrolled Wolf never acts", run(base, 5), ["1:m:goblin", "1:m:orc", "1:p:berald", "1:p:dogg", "2:m:goblin"]);
-eq("previous from first wraps back a round", S.step(ents, { ...base, round: 2, turn: "m:goblin" }, -1), { turn: "p:dogg", round: 1 });
-eq("previous never below round 1", S.step(ents, { ...base, round: 1, turn: "m:goblin" }, -1), { turn: "p:dogg", round: 1 });
-ents = S.buildEntries([mon("g1", "Goblin", 2), mon("o1", "Orc", 1)], [], { ...base, held: ["m:orc"] });
-eq("held entry skipped", S.step(ents, { ...base, held: ["m:orc"], round: 1, turn: "m:goblin" }, 1), { turn: "p:berald", round: 1 });
-eq("current entry held mid-turn: Next moves on from its slot", S.step(ents, { ...base, held: ["m:orc"], round: 1, turn: "m:orc" }, 1), { turn: "p:berald", round: 1 });
-ents = S.buildEntries([mon("g1", "Goblin", 2, 0), mon("g2", "Goblin", 2, -3), mon("o1", "Orc", 1)], [], base);
-eq("group is down only when every token is", [ents.find((e) => e.id === "m:goblin").down, ents.find((e) => e.id === "m:orc").down], [true, false]);
-eq("downed group skipped", S.step(ents, { ...base, round: 3, turn: "p:dogg" }, 1), { turn: "m:orc", round: 4 });
-ents = S.buildEntries([mon("g1", "Goblin", 2), mon("o1", "Orc", 1, 10, false)], [], { ...base, turn: "m:goblin", round: 1 });
-eq("public order: no HP, hidden-on-map monsters left out", S.publicOrder(ents, { ...base, turn: "m:goblin", round: 1 }), {
+eq("each goblin takes its own turn; unrolled Wolf never acts", run(base, 6), ["1:t:g1", "1:t:g2", "1:t:o1", "1:p:berald", "1:p:dogg", "2:t:g1"]);
+eq("previous from first wraps back a round", S.step(ents, { ...base, round: 2, turn: "t:g1" }, -1), { turn: "p:dogg", round: 1 });
+eq("previous never below round 1", S.step(ents, { ...base, round: 1, turn: "t:g1" }, -1), { turn: "p:dogg", round: 1 });
+eq("Roll: one d20 per creature, shared by its tokens; joins an existing roll",
+  Object.fromEntries(Object.entries(S.rollMissing(S.buildEntries([...scene, mon("g3", "Goblin", 3, 2), mon("h1", "Hobgoblin", 1, 1), mon("h2", "Hobgoblin", 2, 1)], [], { ...S.EMPTY_COMBAT, init: { "t:g1": 15 } }), { "t:g1": 15 }, () => 10)).sort()),
+  { "t:g1": 15, "t:g2": 15, "t:g3": 15, "t:h1": 11, "t:h2": 11, "t:o1": 11, "t:w1": 12 });
+ents = S.buildEntries(scene, [], { ...base, held: ["t:o1"] });
+eq("held token skipped", S.step(ents, { ...base, held: ["t:o1"], round: 1, turn: "t:g2" }, 1), { turn: "p:berald", round: 1 });
+eq("current token held mid-turn: Next moves on from its slot", S.step(ents, { ...base, held: ["t:o1"], round: 1, turn: "t:o1" }, 1), { turn: "p:berald", round: 1 });
+ents = S.buildEntries([mon("g1", "Goblin", 1, 2, 0), mon("g2", "Goblin", 2, 2), mon("o1", "Orc", 1, 1)], [], base);
+eq("each token goes down on its own", ents.filter((e) => e.kind === "monster").map((e) => `${e.name}:${e.down}`), ["Goblin 1:true", "Goblin 2:false", "Orc:false"]);
+eq("downed token skipped", S.step(ents, { ...base, round: 3, turn: "p:dogg" }, 1), { turn: "t:g2", round: 4 });
+eq("0.2.0 per-creature rolls and holds still apply", (() => {
+  const e = S.buildEntries([mon("g1", "Goblin", 1, 2), mon("g2", "Goblin", 2, 2)], [], { ...S.EMPTY_COMBAT, init: { "m:goblin": 9 }, held: ["m:goblin"] });
+  return e.map((x) => `${x.init}/${x.held}`);
+})(), ["9/true", "9/true"]);
+ents = S.buildEntries([mon("g1", "Goblin", 1, 2), mon("g2", "Goblin", 2, 2, 10, false)], [], { ...base, turn: "t:g1", round: 1 });
+eq("public order: no HP, hidden-on-map tokens left out", S.publicOrder(ents, { ...base, turn: "t:g1", round: 1 }), {
   round: 1,
-  entries: [{ name: "Goblin", active: true }, { name: "Berald", active: false }, { name: "Dogg", active: false }],
+  entries: [{ name: "Goblin 1", active: true }, { name: "Berald", active: false }, { name: "Dogg", active: false }],
 });
-eq("nothing rolled: no turn", S.step(S.buildEntries([mon("g1", "Goblin", 2)], [], S.EMPTY_COMBAT), S.EMPTY_COMBAT, 1), { turn: null, round: 0 });
+eq("numbering fills gaps", [S.nextNumbers([1, 3], 2), S.nextNumbers([], 3)], [[2, 4], [1, 2, 3]]);
+eq("numeric sort: Goblin 2 before Goblin 10", S.buildEntries([mon("a", "Goblin", 10, 2), mon("b", "Goblin", 2, 2)], [], { ...S.EMPTY_COMBAT, init: { "t:a": 5, "t:b": 5 } }).map((e) => e.name), ["Goblin 2", "Goblin 10"]);
+eq("nothing rolled: no turn", S.step(S.buildEntries([mon("g1", "Goblin", 1, 2)], [], S.EMPTY_COMBAT), S.EMPTY_COMBAT, 1), { turn: null, round: 0 });
 eq("d20 range", [S.rollD20(() => 0), S.rollD20(() => 0.999)], [1, 20]);
 
 // ------------------------------------------------------------ search on real vault names

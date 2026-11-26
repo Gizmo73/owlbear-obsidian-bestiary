@@ -1,15 +1,16 @@
 // Toolbar panel.
-// GM: turn order (party, rolls, Start / Next / Previous, hold, click to select) + connection details.
+// GM: turn order (party, rolls, Start / Next / Previous, hold, click to select, HP) + connection details.
 // Players: the turn order only (names and whose turn it is, never HP).
 
 import OBR, { type Item } from "@owlbear-rodeo/sdk";
 import type { Party, PartiesPayload } from "../shared/protocol";
-import { hpBand } from "../shared/hp";
+import { applyHp, hpBand, parseHpInput } from "../shared/hp";
 import {
   EMPTY_COMBAT,
   buildEntries,
   displayName,
   rollD20,
+  rollMissing as rollMissingInit,
   step,
   type CombatState,
   type Entry,
@@ -17,12 +18,14 @@ import {
 } from "../shared/turns";
 import {
   COMBAT_KEY,
+  TOKEN_KEY,
   combatTokens,
   getLastParty,
   getPort,
   loadParties,
   openChannel,
   readCombat,
+  readCreature,
   readOrder,
   setLastParty,
   setPort,
@@ -42,6 +45,9 @@ let order: PublicOrder | null = null;
 let formOpen: { editing: string | null } | null = null;
 let confirmEnd = false;
 let lastPartyApplied = false;
+/** Entry whose HP box is open. */
+let editingHp: string | null = null;
+let hpError = "";
 
 const esc = (s: string) =>
   s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
@@ -116,9 +122,41 @@ async function move(dir: 1 | -1) {
 }
 
 async function rollMissing() {
-  const init = { ...state.init };
-  for (const e of entries()) if (e.kind === "monster" && e.init === null) init[e.id] = rollD20() + e.mod;
-  await save({ init });
+  await save({ init: rollMissingInit(entries(), state.init, rollD20) });
+}
+
+/** 0.2.0 kept one roll / hold per creature ("m:goblin"); move them onto each token. */
+async function migrateGroupKeys() {
+  if (role !== "GM") return;
+  const legacy = (id: string) => id.startsWith("m:");
+  if (!Object.keys(state.init).some(legacy) && !state.held.some(legacy)) return;
+  const init: Record<string, number> = {};
+  for (const [id, value] of Object.entries(state.init)) if (!legacy(id)) init[id] = value;
+  const held = state.held.filter((id) => !legacy(id));
+  for (const e of entries()) {
+    if (e.kind !== "monster") continue;
+    if (e.init !== null) init[e.id] = e.init;
+    if (e.held && !held.includes(e.id)) held.push(e.id);
+  }
+  const turn = state.turn && legacy(state.turn) ? (entries().find((e) => e.group === state.turn)?.id ?? null) : state.turn;
+  await save({ init, held, turn });
+}
+
+async function applyHpTo(entry: Entry, value: string) {
+  const op = parseHpInput(value);
+  if (!op) {
+    hpError = "Try 7, +5, =20 or max 30";
+    return false;
+  }
+  const ids = entry.tokens.map((t) => t.id);
+  await OBR.scene.items.updateItems(ids, (drafts) => {
+    for (const d of drafts) {
+      const c = readCreature(d.metadata);
+      if (c) d.metadata[TOKEN_KEY] = { ...c, ...applyHp(c, op) };
+    }
+  });
+  hpError = "";
+  return true;
 }
 
 // ------------------------------------------------------------ rendering
@@ -179,13 +217,13 @@ function rowHtml(e: Entry): string {
   const cls = [e.kind, e.id === state.turn && state.round > 0 ? "active" : "", e.held ? "held" : "", e.down ? "down" : ""]
     .filter(Boolean)
     .join(" ");
+  const t = e.tokens[0];
   const hps =
-    e.kind === "monster"
-      ? `<span class="hps">${e.tokens
-          .slice(0, 6)
-          .map((t) => `<span class="chip ${hpBand({ hp: t.hp ?? 0, maxHp: t.maxHp ?? 1 })}" title="${t.hp}/${t.maxHp}">${t.hp}</span>`)
-          .join("")}${e.tokens.length > 6 ? "…" : ""}</span>`
-      : `<span class="tag">PC${e.tokens.length ? "" : " · no token"}</span>`;
+    e.kind !== "monster"
+      ? `<span class="tag">PC${e.tokens.length ? "" : " · no token"}</span>`
+      : editingHp === e.id
+        ? `<input class="hp-input" type="text" inputmode="numeric" placeholder="7 · +5 · =20" aria-label="Damage or heal ${esc(e.name)}">`
+        : `<button class="chip ${hpBand({ hp: t.hp ?? 0, maxHp: t.maxHp ?? 1 })}" type="button" title="Damage or heal">${t.hp}/${t.maxHp}</button>`;
   return `
     <li class="${cls}" data-id="${esc(e.id)}">
       <input class="init" type="number" inputmode="numeric" value="${e.init ?? ""}" placeholder="–" aria-label="Initiative for ${esc(e.name)}">
@@ -215,6 +253,7 @@ function gmHtml(): string {
       <button id="next" class="primary" type="button">${started ? "Next ▶" : "Start"}</button>
       ${started || Object.keys(state.init).length ? `<button id="end" type="button">${confirmEnd ? "End combat?" : "End"}</button>` : ""}
     </div>
+    ${hpError ? `<div class="error">${esc(hpError)}</div>` : ""}
     ${
       list.length
         ? `<ol class="order">${list.map(rowHtml).join("")}</ol>`
@@ -345,9 +384,39 @@ function wireGm() {
     li.querySelector(".name")?.addEventListener("click", () => void selectTokens(entry));
     li.querySelector(".reroll")?.addEventListener("click", () => void save({ init: { ...state.init, [entry.id]: rollD20() + entry.mod } }));
     li.querySelector(".hold")?.addEventListener("click", () => {
-      const held = entry.held ? state.held.filter((id) => id !== entry.id) : [...state.held, entry.id];
+      const held = entry.held ? state.held.filter((id) => id !== entry.id && id !== entry.group) : [...state.held, entry.id];
       void save({ held });
     });
+    li.querySelector(".chip")?.addEventListener("click", () => {
+      editingHp = entry.id;
+      hpError = "";
+      render();
+      root.querySelector<HTMLInputElement>(`li[data-id="${CSS.escape(entry.id)}"] .hp-input`)?.focus();
+    });
+    const hpInput = li.querySelector<HTMLInputElement>(".hp-input");
+    if (hpInput) {
+      const close = () => {
+        editingHp = null;
+        hpInput.blur();
+        render();
+      };
+      hpInput.addEventListener("keydown", async (e) => {
+        if (e.key === "Escape") close();
+        if (e.key !== "Enter") return;
+        if (await applyHpTo(entry, hpInput.value)) close();
+        else {
+          hpInput.select();
+          root.querySelector(".error")?.remove();
+          root.querySelector("ol.order")?.insertAdjacentHTML("beforebegin", `<div class="error">${esc(hpError)}</div>`);
+        }
+      });
+      hpInput.addEventListener("blur", () => {
+        if (editingHp === entry.id) {
+          editingHp = null;
+          setTimeout(render, 0);
+        }
+      });
+    }
   });
 
   on("reconnect", () => channel.post({ type: "reconnect" }));
@@ -397,5 +466,6 @@ OBR.onReady(async () => {
     }
   });
   if (await OBR.scene.isReady()) await load();
+  await migrateGroupKeys();
   await syncPartyMembers();
 });

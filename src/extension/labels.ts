@@ -19,10 +19,13 @@ interface LabelInfo {
   fit: string;
 }
 
-function infoFor(token: Item): LabelInfo | null {
+/** "#2 5/7" when there are several of the creature (matches "Goblin 2" in the turn order), else "5/7". */
+function infoFor(token: Item, siblings: Map<string, number>): LabelInfo | null {
   const c = readCreature(token.metadata);
   if (!c) return null;
-  return { text: `${c.hp}/${c.maxHp}`, color: HP_COLORS[hpBand(c)], fit: `${token.scale.x},${token.scale.y}` };
+  const hp = `${c.hp}/${c.maxHp}`;
+  const text = (siblings.get(c.name) ?? 0) > 1 && c.n ? `#${c.n} ${hp}` : hp;
+  return { text, color: HP_COLORS[hpBand(c)], fit: `${token.scale.x},${token.scale.y}` };
 }
 
 const fitOf = (label: Item) => (label.metadata[LABEL_KEY] as { fit?: string } | undefined)?.fit ?? "";
@@ -72,9 +75,14 @@ export async function reconcile() {
   const tokens = await OBR.scene.items.getItems((item) => readCreature(item.metadata) !== null);
   const labels = (await OBR.scene.local.getItems((item) => !!item.metadata[LABEL_KEY])) as Text[];
 
+  const siblings = new Map<string, number>();
+  for (const token of tokens) {
+    const name = readCreature(token.metadata)!.name;
+    siblings.set(name, (siblings.get(name) ?? 0) + 1);
+  }
   const wanted = new Map<string, { token: Item; info: LabelInfo }>();
   for (const token of tokens) {
-    const info = infoFor(token);
+    const info = infoFor(token, siblings);
     if (info) wanted.set(token.id, { token, info });
   }
 
@@ -114,8 +122,8 @@ export async function reconcile() {
     const created: Item[] = [];
     for (const { token, info } of missing) {
       const bounds = await OBR.scene.items.getItemBounds([token.id]);
-      // Wide enough for "175/175" even on tiny tokens; centred over the token.
-      const boxWidth = Math.max(bounds.width, font * 5);
+      // Wide enough for "#12 175/175" even on tiny tokens; centred over the token.
+      const boxWidth = Math.max(bounds.width, font * 7);
       created.push(
         buildText()
           .textType("PLAIN")

@@ -6,6 +6,7 @@ import OBR, { isImage, type Item } from "@owlbear-rodeo/sdk";
 import type { BestiaryEntry } from "../shared/bestiary";
 import { applyHp, describeHpOp, hpBand, parseHpInput } from "../shared/hp";
 import { matchKey, stripTokenSuffix } from "../shared/names";
+import { monsterName, nextNumbers } from "../shared/turns";
 import { BestiarySearch } from "../shared/search";
 import {
   PC_KEY,
@@ -16,6 +17,7 @@ import {
   openChannel,
   readCreature,
   readPc,
+  usedNumbers,
   type CachedIndex,
   type ChannelMessage,
 } from "./common";
@@ -176,10 +178,25 @@ async function assign(result: Result) {
     message = `Linked to ${result.name} (PC)`;
   } else {
     const creature = creatureFromEntry(result.entry);
+    // Number the new tokens after any of this creature already in the scene, in selection order.
+    const scene = await OBR.scene.items.getItems();
+    const keep = new Map<string, number>();
+    for (const item of items) {
+      const c = readCreature(item.metadata);
+      if (c?.name === creature.name && c.n) keep.set(item.id, c.n);
+    }
+    const fresh = nextNumbers(
+      [...usedNumbers(scene, creature.name, new Set(ids)), ...keep.values()],
+      ids.length - keep.size,
+    );
+    const numbers = new Map(ids.map((id) => [id, keep.get(id) ?? fresh.shift()!]));
     await OBR.scene.items.updateItems(ids, (drafts) => {
       for (const d of drafts) {
         delete d.metadata[PC_KEY];
-        d.metadata[TOKEN_KEY] = { ...creature };
+        const current = readCreature(d.metadata);
+        // Re-picking the same creature keeps HP; a different one starts fresh.
+        d.metadata[TOKEN_KEY] =
+          current?.name === creature.name ? { ...current, n: numbers.get(d.id) } : { ...creature, n: numbers.get(d.id) };
       }
     });
     channel.post({ type: "show", name: result.entry.name });
@@ -202,7 +219,7 @@ function renderHp() {
       c
         ? `
       <div class="row ${hpBand(c)}">
-        <span class="name">${esc(items.length === 1 ? c.name : tokenLabel(item))}</span>
+        <span class="name">${esc(items.length === 1 ? c.name : monsterName(c.name, c.n, 2))}</span>
         <span class="hpv">${c.hp}/${c.maxHp}</span>
       </div>`
         : `
